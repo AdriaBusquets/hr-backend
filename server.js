@@ -1,17 +1,20 @@
 /********************************************************************
- *  server.js   – main Express bootstrap (Render + Supabase ready)
+ * server.js – ESM version (required for Render + Supabase)
  *******************************************************************/
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Fix __dirname for ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
 /*--------------------------------------------------------------- */
-/*  1. CORS (cloud friendly)
- *     - Allow localhost during development
- *     - Allow all origins for Render (temporary)
- *--------------------------------------------------------------- */
+/*  CORS setup                                                    */
+/*--------------------------------------------------------------- */
 app.use(
   cors({
     origin: ['http://localhost:3000', '*'],
@@ -24,28 +27,27 @@ app.use(
 app.options('*', cors());
 app.use(express.json());
 
-// If you still keep uploads for local development (optional)
+// local uploads (optional)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 /*--------------------------------------------------------------- */
-/*  2. Import Routes                                               */
+/*  Import ESM Routes                                             */
 /*--------------------------------------------------------------- */
-const addEmployees = require('./routes/addEmployees');
-const employeesRoutes = require('./routes/employees');
-const fitxatgeRoutes = require('./routes/fitxatge');
-const incidencesRoutes = require('./routes/incidences');
-const controlWorkers = require('./routes/controlWorkers');
-const infoRoutes = require('./routes/info');
-const alertsRouter = require('./routes/alerts');
-const fitxatgeEditorRoutes = require('./routes/fitxatgeEditor');
-const supervisorPasswordsRoute = require('./routes/supervisorpasswords');
+import addEmployees from './routes/addEmployees.js';
+import employeesRoutes from './routes/employees.js';
+import fitxatgeRoutes from './routes/fitxatge.js';
+import incidencesRoutes from './routes/incidences.js';
+import controlWorkers from './routes/controlWorkers.js';
+import infoRoutes from './routes/info.js';
+import alertsRouter from './routes/alerts.js';
+import fitxatgeEditorRoutes from './routes/fitxatgeEditor.js';
+import supervisorPasswordsRoute from './routes/supervisorpasswords.js';
 
 /*--------------------------------------------------------------- */
-/*  3. Mount routes (order matters)                                */
+/*  Mount routes                                                  */
 /*--------------------------------------------------------------- */
-app.use('/api/employees', addEmployees);     // POST first
-app.use('/api/employees', employeesRoutes);  // other CRUD
-
+app.use('/api/employees', addEmployees);
+app.use('/api/employees', employeesRoutes);
 app.use('/api/fitxatge', fitxatgeRoutes);
 app.use('/api/incidences', incidencesRoutes);
 app.use('/api/control-workers', controlWorkers);
@@ -55,13 +57,9 @@ app.use('/api/fitxatgeEditor', fitxatgeEditorRoutes);
 app.use('/api/supervisorpasswords', supervisorPasswordsRoute);
 
 /*--------------------------------------------------------------- */
-/*  4. Start Server (Render compatible)
- *     - Render injects PORT dynamically
- *     - Fallback to 5000 for local development
- *--------------------------------------------------------------- */
+/*  Start server                                                  */
+/*--------------------------------------------------------------- */
 const PORT = process.env.PORT || 5000;
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log('🚀 Server running:');
-  console.log(`   • Port → ${PORT}`);
-});
+app.listen(PORT, '0.0.0.0', () =>
+  console.log(`🚀 Server running on port ${PORT}`)
+);
