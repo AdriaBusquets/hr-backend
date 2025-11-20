@@ -2,7 +2,8 @@
 import express from 'express';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek.js';
-import { supabase } from '../supabase.js';
+const supabase = require('../supabase');
+
 
 dayjs.extend(isoWeek);
 

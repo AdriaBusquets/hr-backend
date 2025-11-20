@@ -12,7 +12,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { supabase } from '../supabase.js';
+const supabase = require('../supabase');
 
 const router = express.Router();
 

@@ -1,6 +1,7 @@
 import express from 'express';
 import dayjs from 'dayjs';
-import { supabase } from '../supabase.js';
+const supabase = require('../supabase');
+
 
 const router = express.Router();
 
