@@ -1,7 +1,8 @@
-// routes/supervisorpasswords.js  (Supabase version)
-const express = require('express');
+// routes/supervisorpasswords.js  (Supabase + ESM)
+import express from 'express';
+import supabase from '../supabase.js';
+
 const router = express.Router();
-const supabase = require('../supabase');   // your Supabase client
 
 /**
  * GET /api/control-workers/supervisors?department=Bar
@@ -18,36 +19,36 @@ router.get('/supervisors', async (req, res) => {
     return res.status(400).json({ error: 'Missing department' });
   }
 
-  // Query:
-  // employees → workdetails → jobdescription
+  // Query structure:
+  // workdetails → employees → jobdescription
   const { data, error } = await supabase
     .from('workdetails')
     .select(`
       Supervisor,
-      Employees (
+      employees:Employees (
         full_name,
         pin_code
       ),
-      JobDescription (
+      job:JobDescription (
         department
       )
     `)
     .eq('Supervisor', true)
-    .eq('JobDescription.department', department);
+    .eq('job.department', department);
 
   if (error) {
     console.error('Supabase error fetching supervisors:', error);
     return res.status(500).json({ error: 'Failed to fetch supervisors' });
   }
 
-  // Flatten & clean response
+  // Flatten the nested structure from Supabase
   const supervisors = (data || []).map(row => ({
-    full_name: row.Employees.full_name,
-    pin_code: row.Employees.pin_code,
-    department: row.JobDescription.department
+    full_name: row.employees?.full_name,
+    pin_code: row.employees?.pin_code,
+    department: row.job?.department
   }));
 
   res.json(supervisors);
 });
 
-module.exports = router;
+export default router;

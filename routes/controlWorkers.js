@@ -11,7 +11,7 @@
 import express from 'express';
 import multer from 'multer';
 import path from 'path';
-const supabase = require('../supabase');
+import supabase from '../supabase.js';
 
 
 const router = express.Router();

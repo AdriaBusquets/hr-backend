@@ -1,7 +1,6 @@
-// routes/employees.js  — Supabase version (ES modules)
+// routes/employees.js — Supabase ES module version
 import express from 'express';
-const supabase = require('../supabase');
-
+import supabase from '../supabase.js';
 
 const router = express.Router();
 
@@ -12,7 +11,7 @@ router.get('/', async (req, res) => {
   const { name } = req.query;
 
   try {
-    let query = supabase.from('Employees').select('*');
+    let query = supabase.from('employees').select('*');
 
     if (name) {
       query = query.ilike('full_name', `%${name}%`);
@@ -21,8 +20,8 @@ router.get('/', async (req, res) => {
     query = query.order('full_name', { ascending: true });
 
     const { data, error } = await query;
-    if (error) throw error;
 
+    if (error) throw error;
     res.json(data || []);
   } catch (err) {
     console.error('Error fetching employees:', err);
@@ -37,7 +36,7 @@ router.get('/:id', async (req, res) => {
   const id = Number(req.params.id);
 
   const { data, error } = await supabase
-    .from('Employees')
+    .from('employees')
     .select('*')
     .eq('employee_id', id)
     .maybeSingle();
@@ -63,7 +62,7 @@ router.post('/', async (req, res) => {
   }
 
   const { data, error } = await supabase
-    .from('Employees')
+    .from('employees')
     .insert([
       { full_name, date_of_birth, gender, photo, pin_code }
     ])
@@ -79,7 +78,7 @@ router.post('/', async (req, res) => {
 });
 
 /* --------------------------------------------------------------------- */
-/* PUT /api/employees/:id  (update)                                      */
+/* PUT /api/employees/:id  (update employee)                             */
 /* --------------------------------------------------------------------- */
 router.put('/:id', async (req, res) => {
   const id = Number(req.params.id);
@@ -89,8 +88,8 @@ router.put('/:id', async (req, res) => {
     return res.status(400).json({ error: 'Missing required fields.' });
   }
 
-  const { error, data } = await supabase
-    .from('Employees')
+  const { data, error } = await supabase
+    .from('employees')
     .update({
       full_name,
       date_of_birth,
@@ -107,7 +106,7 @@ router.put('/:id', async (req, res) => {
   }
 
   if (!data || data.length === 0) {
-    return res.status(404).json({ error: 'Employee not found or no changes made.' });
+    return res.status(404).json({ error: 'Employee not found.' });
   }
 
   res.json({ message: 'Employee updated.' });
@@ -119,8 +118,8 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const id = Number(req.params.id);
 
-  const { error, count } = await supabase
-    .from('Employees')
+  const { error } = await supabase
+    .from('employees')
     .delete()
     .eq('employee_id', id);
 
@@ -134,11 +133,10 @@ router.delete('/:id', async (req, res) => {
 
 /* --------------------------------------------------------------------- */
 /* GET /api/employees/hours/:employee_id                                 */
-/* (uses RPC function get_employee_daily_hours)                           */
+/* (requires RPC: get_employee_daily_hours)                              */
 /* --------------------------------------------------------------------- */
 router.get('/hours/:employee_id', async (req, res) => {
   const employee_id = Number(req.params.employee_id);
-
   if (Number.isNaN(employee_id)) {
     return res.status(400).json({ error: 'Invalid employee ID.' });
   }
@@ -149,7 +147,7 @@ router.get('/hours/:employee_id', async (req, res) => {
   );
 
   if (error) {
-    console.error('Error fetching employee hours:', error);
+    console.error('RPC get_employee_daily_hours error:', error);
     return res.status(500).json({ error: 'Failed to fetch employee hours.' });
   }
 

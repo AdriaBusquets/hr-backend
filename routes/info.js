@@ -1,14 +1,14 @@
-// routes/info.js  (Supabase version)
-const express = require('express');
+// routes/info.js  (Supabase + ESM)
+import express from 'express';
+import supabase from '../supabase.js';
+
 const router = express.Router();
-const supabase = require('../supabase');  // your client
 
 /**************************************************************
  * 1) GET /api/info/tables
  * Supabase cannot list tables → we return a known list
  **************************************************************/
 router.get('/tables', (_req, res) => {
-  // Add/remove tables here if needed
   const tables = [
     'employees',
     'administration',
@@ -24,7 +24,6 @@ router.get('/tables', (_req, res) => {
   ];
   res.json(tables);
 });
-
 
 /**************************************************************
  * 2) GET /api/info/table/:tableName
@@ -55,10 +54,9 @@ router.get('/table/:tableName', async (req, res) => {
   res.json(data);
 });
 
-
 /**************************************************************
  * 3) GET /api/info/employees
- * Return all employee names
+ * Return all employee names (full_name)
  **************************************************************/
 router.get('/employees', async (_req, res) => {
   const { data, error } = await supabase
@@ -73,7 +71,6 @@ router.get('/employees', async (_req, res) => {
 
   res.json(data.map(e => e.full_name));
 });
-
 
 /**************************************************************
  * 4) GET /api/info/table/:tableName/:employeeName
@@ -91,7 +88,7 @@ router.get('/table/:tableName/:employeeName', async (req, res) => {
     return res.status(400).json({ error: 'Invalid or unauthorized table name.' });
   }
 
-  // 1) get employee_id
+  // 1) find employee_id
   const { data: emp, error: empErr } = await supabase
     .from('employees')
     .select('employee_id')
@@ -102,7 +99,7 @@ router.get('/table/:tableName/:employeeName', async (req, res) => {
     return res.status(404).json({ error: 'Employee not found.' });
   }
 
-  // 2) load filtered table data
+  // 2) fetch filtered table data
   const { data, error } = await supabase
     .from(tableName)
     .select('*')
@@ -116,5 +113,4 @@ router.get('/table/:tableName/:employeeName', async (req, res) => {
   res.json(data);
 });
 
-
-module.exports = router;
+export default router;

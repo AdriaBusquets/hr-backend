@@ -1,7 +1,6 @@
 import express from 'express';
 import dayjs from 'dayjs';
-const supabase = require('../supabase');
-
+import supabase from '../supabase.js';
 
 const router = express.Router();
 
@@ -71,13 +70,15 @@ async function getOver225Days() {
 /* 4️⃣ Open incidences                                                 */
 /* ================================================================== */
 async function getIncidencesData() {
-  const { data: totalOpenData, error: totalOpenErr } = await supabase
+
+  // ❗ FIXED: this is the correct Supabase count syntax
+  const { count, error: countErr } = await supabase
     .from("Incidences")
-    .select("incidence_id", { count: "exact", head: true })
+    .select('incidence_id', { count: 'exact', head: true })
     .neq("InstanceStatus", "Completed");
 
-  if (totalOpenErr) {
-    console.error("totalOpen error:", totalOpenErr);
+  if (countErr) {
+    console.error("totalOpen error:", countErr);
   }
 
   const { data: perWorkplace, error: perErr } = await supabase.rpc(
@@ -90,7 +91,7 @@ async function getIncidencesData() {
   }
 
   return {
-    totalOpen: totalOpenData || 0,
+    totalOpen: count || 0,
     perWorkplace,
   };
 }

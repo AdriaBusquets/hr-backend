@@ -1,15 +1,16 @@
-// routes/fitxatgeEditor.js — Supabase version
+// routes/fitxatgeEditor.js — FINAL Supabase + ESM version
 import express from 'express';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek.js';
-const supabase = require('../supabase');
-
+import supabase from '../supabase.js';
 
 dayjs.extend(isoWeek);
 
 const router = express.Router();
 
-// Helpers
+/* --------------------------------------------------------------- */
+/* Helpers                                                         */
+/* --------------------------------------------------------------- */
 function timeToSeconds(timeStr) {
   if (!timeStr) return 0;
   const [hh, mm, ss] = timeStr.split(':').map(Number);
@@ -23,10 +24,9 @@ function secondsToTime(totalSeconds) {
   return `${hh}:${mm}:${ss}`;
 }
 
-/**
- * Recompute daily/weekly/monthly accumulations for a single employee.
- * Uses Supabase instead of SQLite.
- */
+/* --------------------------------------------------------------- */
+/* Recompute hours for one employee                               */
+/* --------------------------------------------------------------- */
 async function recomputeHours(employeeId) {
   try {
     const { data: rows, error } = await supabase
@@ -38,7 +38,7 @@ async function recomputeHours(employeeId) {
       .order('id', { ascending: true });
 
     if (error) {
-      console.error('Error fetching Fitxatge rows for recompute:', error);
+      console.error('Recompute fetch error:', error);
       return;
     }
 
@@ -56,31 +56,31 @@ async function recomputeHours(employeeId) {
       const rowDate = dayjs(record.dia);
       const rowDateTime = dayjs(`${record.dia} ${record.hora}`);
 
-      // Day change -> reset daily
+      // Day change
       if (!currentDay || !rowDate.isSame(currentDay, 'day')) {
         runningDailySeconds = 0;
         currentDay = rowDate;
       }
 
-      // Week change -> reset weekly (ISO week)
+      // Week change (ISO week)
       const rowWeek = rowDate.isoWeek();
-      if (!currentWeek || rowWeek !== currentWeek) {
+      if (currentWeek !== rowWeek) {
         runningWeeklySeconds = 0;
         currentWeek = rowWeek;
       }
 
-      // Month change -> reset monthly
-      const rowMonthStr = rowDate.format('YYYY-MM');
-      if (!currentMonth || rowMonthStr !== currentMonth) {
+      // Month change
+      const rowMonth = rowDate.format('YYYY-MM');
+      if (currentMonth !== rowMonth) {
         runningMonthlySeconds = 0;
-        currentMonth = rowMonthStr;
+        currentMonth = rowMonth;
       }
 
       if (record.working === true) {
         // CHECK-IN
         lastCheckInTime = rowDateTime;
 
-        const { error: updErr } = await supabase
+        await supabase
           .from('fitxatge')
           .update({
             active: true,
@@ -89,252 +89,172 @@ async function recomputeHours(employeeId) {
             hores_mensuals: '00:00:00',
           })
           .eq('id', record.id);
-
-        if (updErr) {
-          console.error(
-            'Error updating check-in row during recompute:',
-            updErr
-          );
-        }
       } else {
         // CHECK-OUT
-        let diffInSeconds = 0;
-        if (lastCheckInTime) {
-          diffInSeconds = rowDateTime.diff(lastCheckInTime, 'second');
-          if (diffInSeconds < 0) diffInSeconds = 0;
-        }
+        let diffInSeconds = lastCheckInTime
+          ? rowDateTime.diff(lastCheckInTime, 'second')
+          : 0;
+
+        if (diffInSeconds < 0) diffInSeconds = 0;
 
         runningDailySeconds += diffInSeconds;
         runningWeeklySeconds += diffInSeconds;
         runningMonthlySeconds += diffInSeconds;
 
-        const dailyStr = secondsToTime(runningDailySeconds);
-        const weeklyStr = secondsToTime(runningWeeklySeconds);
-        const monthlyStr = secondsToTime(runningMonthlySeconds);
-
-        const { error: updErr } = await supabase
+        await supabase
           .from('fitxatge')
           .update({
             active: false,
-            hores_diaries: dailyStr,
-            hores_setmanals: weeklyStr,
-            hores_mensuals: monthlyStr,
+            hores_diaries: secondsToTime(runningDailySeconds),
+            hores_setmanals: secondsToTime(runningWeeklySeconds),
+            hores_mensuals: secondsToTime(runningMonthlySeconds),
           })
           .eq('id', record.id);
 
-        if (updErr) {
-          console.error(
-            'Error updating check-out row during recompute:',
-            updErr
-          );
-        }
-
-        // After a check-out, clear last check-in
         lastCheckInTime = null;
       }
     }
   } catch (err) {
-    console.error('recomputeHours unexpected error:', err);
+    console.error('Recompute fatal error:', err);
   }
 }
 
-/* -------------------------------------------------- */
-/*       REST Endpoints for Check-In/Out Editor       */
-/* -------------------------------------------------- */
-
-/**
- * GET /api/fitxatge-editor/editor/:employee_id
- * (exact base path depends on how you mount this router)
- */
+/* --------------------------------------------------------------- */
+/* GET all rows for an employee                                    */
+/* --------------------------------------------------------------- */
 router.get('/editor/:employee_id', async (req, res) => {
   const employeeId = Number(req.params.employee_id);
-  if (Number.isNaN(employeeId)) {
+  if (Number.isNaN(employeeId))
     return res.status(400).json({ error: 'Invalid employee_id.' });
+
+  const { data, error } = await supabase
+    .from('fitxatge')
+    .select('*')
+    .eq('employee_id', employeeId)
+    .order('dia', { ascending: true })
+    .order('hora', { ascending: true })
+    .order('id', { ascending: true });
+
+  if (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Error fetching Fitxatge.' });
   }
 
-  try {
-    const { data, error } = await supabase
-      .from('fitxatge')
-      .select('*')
-      .eq('employee_id', employeeId)
-      .order('dia', { ascending: true })
-      .order('hora', { ascending: true })
-      .order('id', { ascending: true });
-
-    if (error) {
-      console.error('Error fetching Fitxatge for editor:', error);
-      return res
-        .status(500)
-        .json({ error: 'Database error while fetching records.' });
-    }
-
-    res.json(data || []);
-  } catch (err) {
-    console.error('Error fetching Fitxatge for editor:', err);
-    res
-      .status(500)
-      .json({ error: 'Database error while fetching records.' });
-  }
+  res.json(data || []);
 });
 
-/**
- * POST /api/fitxatge-editor/editor
- * Body: { employee_id, Dia, Hora, Working }
- */
+/* --------------------------------------------------------------- */
+/* INSERT new record                                               */
+/* --------------------------------------------------------------- */
 router.post('/editor', async (req, res) => {
   const { employee_id, Dia, Hora, Working } = req.body;
 
   if (!employee_id || !Dia || !Hora || typeof Working === 'undefined') {
-    return res
-      .status(400)
-      .json({ error: 'Missing required fields (employee_id, Dia, Hora, Working).' });
+    return res.status(400).json({
+      error: 'Missing required fields (employee_id, Dia, Hora, Working)',
+    });
   }
 
-  const employeeId = Number(employee_id);
-  const working = !!Working;
-  const activeValue = working;
+  const { error } = await supabase.from('fitxatge').insert({
+    dia: Dia,
+    hora: Hora,
+    employee_id: employee_id,
+    working: !!Working,
+    active: !!Working,
+    hores_diaries: '00:00:00',
+    hores_setmanals: '00:00:00',
+    hores_mensuals: '00:00:00',
+    vacances: 0,
+  });
 
-  try {
-    const { error: insertErr } = await supabase.from('fitxatge').insert([
-      {
-        dia: Dia,
-        hora: Hora,
-        employee_id: employeeId,
-        working,
-        active: activeValue,
-        hores_diaries: '00:00:00',
-        hores_setmanals: '00:00:00',
-        hores_mensuals: '00:00:00',
-        vacances: 0,
-      },
-    ]);
-
-    if (insertErr) {
-      console.error('Error inserting new Fitxatge:', insertErr);
-      return res
-        .status(500)
-        .json({ error: 'Database error while inserting record.' });
-    }
-
-    await recomputeHours(employeeId);
-
-    return res.json({ message: 'Record inserted successfully.' });
-  } catch (err) {
-    console.error('Error inserting new Fitxatge:', err);
-    return res
-      .status(500)
-      .json({ error: 'Database error while inserting record.' });
+  if (error) {
+    console.error('Insert error:', error);
+    return res.status(500).json({ error: 'Insert failed.' });
   }
+
+  await recomputeHours(employee_id);
+  res.json({ message: 'Record inserted.' });
 });
 
-/**
- * PUT /api/fitxatge-editor/editor/:id
- * Body: { Dia, Hora, Working }
- */
+/* --------------------------------------------------------------- */
+/* UPDATE record                                                   */
+/* --------------------------------------------------------------- */
 router.put('/editor/:id', async (req, res) => {
   const id = Number(req.params.id);
   const { Dia, Hora, Working } = req.body;
 
   if (!Dia || !Hora || typeof Working === 'undefined') {
-    return res
-      .status(400)
-      .json({ error: 'Missing required fields (Dia, Hora, Working).' });
+    return res.status(400).json({
+      error: 'Missing required fields (Dia, Hora, Working)',
+    });
   }
 
-  try {
-    // find employee_id first
-    const { data: row, error: findErr } = await supabase
-      .from('fitxatge')
-      .select('employee_id')
-      .eq('id', id)
-      .maybeSingle();
+  const { data, error: findErr } = await supabase
+    .from('fitxatge')
+    .select('employee_id')
+    .eq('id', id)
+    .maybeSingle();
 
-    if (findErr) {
-      console.error('Error retrieving Fitxatge by ID:', findErr);
-      return res
-        .status(500)
-        .json({ error: 'Database error while retrieving record.' });
-    }
-    if (!row) {
-      return res.status(404).json({ error: 'Record not found.' });
-    }
-
-    const employeeId = row.employee_id;
-    const working = !!Working;
-
-    const { error: updateErr } = await supabase
-      .from('fitxatge')
-      .update({
-        dia: Dia,
-        hora: Hora,
-        working,
-      })
-      .eq('id', id);
-
-    if (updateErr) {
-      console.error('Error updating Fitxatge record:', updateErr);
-      return res
-        .status(500)
-        .json({ error: 'Database error while updating record.' });
-    }
-
-    await recomputeHours(employeeId);
-
-    return res.json({ message: 'Record updated successfully.' });
-  } catch (err) {
-    console.error('Error updating Fitxatge record:', err);
-    return res
-      .status(500)
-      .json({ error: 'Database error while updating record.' });
+  if (findErr) {
+    console.error(findErr);
+    return res.status(500).json({ error: 'Find error.' });
   }
+
+  if (!data) return res.status(404).json({ error: 'Record not found.' });
+
+  const employeeId = data.employee_id;
+
+  const { error: updErr } = await supabase
+    .from('fitxatge')
+    .update({
+      dia: Dia,
+      hora: Hora,
+      working: !!Working,
+    })
+    .eq('id', id);
+
+  if (updErr) {
+    console.error(updErr);
+    return res.status(500).json({ error: 'Update failed.' });
+  }
+
+  await recomputeHours(employeeId);
+  res.json({ message: 'Record updated.' });
 });
 
-/**
- * DELETE /api/fitxatge-editor/editor/:id
- */
+/* --------------------------------------------------------------- */
+/* DELETE record                                                   */
+/* --------------------------------------------------------------- */
 router.delete('/editor/:id', async (req, res) => {
   const id = Number(req.params.id);
 
-  try {
-    const { data: row, error: findErr } = await supabase
-      .from('fitxatge')
-      .select('employee_id')
-      .eq('id', id)
-      .maybeSingle();
+  const { data, error: findErr } = await supabase
+    .from('fitxatge')
+    .select('employee_id')
+    .eq('id', id)
+    .maybeSingle();
 
-    if (findErr) {
-      console.error('Error retrieving Fitxatge for delete:', findErr);
-      return res
-        .status(500)
-        .json({ error: 'Database error while retrieving record.' });
-    }
-    if (!row) {
-      return res.status(404).json({ error: 'Record not found.' });
-    }
-
-    const employeeId = row.employee_id;
-
-    const { error: deleteErr } = await supabase
-      .from('fitxatge')
-      .delete()
-      .eq('id', id);
-
-    if (deleteErr) {
-      console.error('Error deleting Fitxatge record:', deleteErr);
-      return res
-        .status(500)
-        .json({ error: 'Database error while deleting record.' });
-    }
-
-    await recomputeHours(employeeId);
-
-    return res.json({ message: 'Record deleted successfully.' });
-  } catch (err) {
-    console.error('Error deleting Fitxatge record:', err);
-    return res
-      .status(500)
-      .json({ error: 'Database error while deleting record.' });
+  if (findErr) {
+    console.error(findErr);
+    return res.status(500).json({ error: 'Find error.' });
   }
+
+  if (!data) return res.status(404).json({ error: 'Record not found.' });
+
+  const employeeId = data.employee_id;
+
+  const { error: deleteErr } = await supabase
+    .from('fitxatge')
+    .delete()
+    .eq('id', id);
+
+  if (deleteErr) {
+    console.error(deleteErr);
+    return res.status(500).json({ error: 'Delete failed.' });
+  }
+
+  await recomputeHours(employeeId);
+  res.json({ message: 'Record deleted.' });
 });
 
 export default router;

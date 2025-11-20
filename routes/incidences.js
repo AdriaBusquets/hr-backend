@@ -1,8 +1,9 @@
-// routes/incidences.js  (Supabase version)
-const express = require('express');
+// routes/incidences.js  (Supabase + ESM version)
+import express from 'express';
+import dayjs from 'dayjs';
+import supabase from '../supabase.js';
+
 const router = express.Router();
-const dayjs = require('dayjs');
-const supabase = require('../supabase');   // ← your Supabase client
 
 /********************************************************************
  * POST /api/incidences
@@ -87,7 +88,6 @@ router.get('/', async (req, res) => {
     return res.status(500).json({ error: 'Failed to fetch incidences.' });
   }
 
-  // Flatten response for frontend simplicity
   const cleaned = data.map(i => ({
     incidence_id: i.incidence_id,
     incidence_type: i.incidence_type,
@@ -105,7 +105,6 @@ router.get('/', async (req, res) => {
 
 /********************************************************************
  * GET /api/incidences/job-ids
- * Fetch all job roles
  *******************************************************************/
 router.get('/job-ids', async (_req, res) => {
   const { data, error } = await supabase
@@ -113,15 +112,15 @@ router.get('/job-ids', async (_req, res) => {
     .select('job_id, job_title')
     .order('job_id');
 
-  if (error)
+  if (error) {
     return res.status(500).json({ error: 'Failed to load job list.' });
+  }
 
   res.json(data);
 });
 
 /********************************************************************
  * PUT /api/incidences/complete/:id
- * Mark an incidence as Completed
  *******************************************************************/
 router.put('/complete/:id', async (req, res) => {
   const { id } = req.params;
@@ -144,4 +143,4 @@ router.put('/complete/:id', async (req, res) => {
   res.json({ message: `Incidence ${id} marked as completed.` });
 });
 
-module.exports = router;
+export default router;
