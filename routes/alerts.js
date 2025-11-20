@@ -2,12 +2,13 @@ import express from 'express';
 import dayjs from 'dayjs';
 import supabase from '../supabase.js';
 
-router.get('/health', (req, res) => {
-  console.log("✔ alerts.js health check hit");
-  res.json({ ok: true, message: "alerts.js route loaded and responding." });
-});
 
 const router = express.Router();
+
+router.get('/health', (req, res) => {
+  res.json({ ok: true });
+});
+
 
 /* ------------------------------------------------------------------ */
 /* Test route – quick ping                                            */
