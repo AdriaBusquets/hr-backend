@@ -71,6 +71,8 @@ import supervisorPasswordsRoute from './routes/supervisorpasswords.js';
 console.log("supervisorPasswordsRoute =", typeof supervisorPasswordsRoute);
 
 
+
+
 /*--------------------------------------------------------------- */
 /*  Mount routes                                                  */
 /*--------------------------------------------------------------- */
@@ -83,6 +85,18 @@ app.use('/api/info', infoRoutes);
 app.use('/api/alerts', alertsRouter);
 app.use('/api/fitxatgeEditor', fitxatgeEditorRoutes);
 app.use('/api/supervisorpasswords', supervisorPasswordsRoute);
+
+/*--------------------------------------------------------------- */
+/*  ENVIRONMENT VARIABLES DEBUG ROUTE                            */
+/*--------------------------------------------------------------- */
+app.get('/api/env-test', (req, res) => {
+  return res.json({
+    SUPABASE_URL: process.env.SUPABASE_URL || "MISSING",
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? "OK" : "MISSING",
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? "OK" : "MISSING"
+  });
+});
+
 
 /*--------------------------------------------------------------- */
 /*  Start server                                                  */
