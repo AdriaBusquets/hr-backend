@@ -33,6 +33,13 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 /*--------------------------------------------------------------- */
 /*  Import ESM Routes                                             */
 /*--------------------------------------------------------------- */
+
+console.log("Loaded ENV Vars:", {
+  SUPABASE_URL: process.env.SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? "OK" : "MISSING"
+});
+
+
 /*--------------------------------------------------------------- */
 /*  Import ESM Routes + DEBUG LOGS                                */
 /*--------------------------------------------------------------- */
