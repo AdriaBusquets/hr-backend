@@ -37,7 +37,7 @@ async function generateUniquePin() {
     const pin = (1000 + Math.floor(Math.random() * 9000)).toString();
 
     const { data, error } = await supabase
-      .from('Employees')
+      .from('employees')
       .select('pin_code')
       .eq('pin_code', pin)
       .maybeSingle();
@@ -75,7 +75,7 @@ router.post(
 
       /* 2. Insert Employee ---------------------------------------- */
       const { data: empData, error: empErr } = await supabase
-        .from('Employees')
+        .from('employees')
         .insert([
           {
             full_name,
@@ -108,7 +108,7 @@ router.post(
 
         // Save in DB
         const { error: photoErr } = await supabase
-          .from('Employees')
+          .from('employees')
           .update({ photo: relativePath })
           .eq('employee_id', employee_id);
 
@@ -119,11 +119,11 @@ router.post(
 
       /* 4. Insert Blank Child Rows -------------------------------- */
       const childTables = [
-        { table: 'Administration', payload: { employee_id, employment_status: '' } },
-        { table: 'Contact',        payload: { employee_id } },
-        { table: 'Compensation',   payload: { employee_id } },
-        { table: 'WorkDetails',    payload: { employee_id, Supervisor: false } },
-        { table: 'Academics',      payload: { employee_id } },
+        { table: 'administration', payload: { employee_id, employment_status: '' } },
+        { table: 'contact',        payload: { employee_id } },
+        { table: 'compensation',   payload: { employee_id } },
+        { table: 'workdetails',    payload: { employee_id, Supervisor: false } },
+        { table: 'academics',      payload: { employee_id } },
       ];
 
       for (const entry of childTables) {

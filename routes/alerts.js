@@ -79,7 +79,7 @@ async function getIncidencesData() {
 
   // ❗ FIXED: this is the correct Supabase count syntax
   const { count, error: countErr } = await supabase
-    .from("Incidences")
+    .from("incidences")
     .select('incidence_id', { count: 'exact', head: true })
     .neq("InstanceStatus", "Completed");
 

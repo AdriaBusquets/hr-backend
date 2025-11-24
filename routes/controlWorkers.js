@@ -66,7 +66,7 @@ async function uploadToStorage(employeeId, file) {
 router.get('/', async (_req, res) => {
   try {
     const { data, error } = await supabase
-      .from('Employees')
+      .from('employees')
       .select('employee_id, full_name')
       .order('full_name', { ascending: true });
 
@@ -87,7 +87,7 @@ router.get('/', async (_req, res) => {
 router.get('/job-descriptions', async (_req, res) => {
   try {
     const { data, error } = await supabase
-      .from('JobDescription')
+      .from('jobdescription')
       .select('*')
       .order('department', { ascending: true });
 
@@ -116,47 +116,47 @@ router.get('/:id', async (req, res) => {
       { data: administration, error: adminErr },
       { data: contact, error: contactErr },
       { data: compensation, error: compErr },
-      { data: workDetails, error: workErr },
+      { data: workdetails, error: workErr },
       { data: academics, error: acadErr },
       { data: fitxatge, error: fitxErr },
       { data: baixes, error: baixErr },
     ] = await Promise.all([
       supabase
-        .from('Employees')
+        .from('employees')
         .select('*')
         .eq('employee_id', employeeId)
         .maybeSingle(),
       supabase
-        .from('Administration')
+        .from('administration')
         .select('*')
         .eq('employee_id', employeeId)
         .maybeSingle(),
       supabase
-        .from('Contact')
+        .from('contact')
         .select('*')
         .eq('employee_id', employeeId)
         .maybeSingle(),
       supabase
-        .from('Compensation')
+        .from('compensation')
         .select('*')
         .eq('employee_id', employeeId)
         .maybeSingle(),
       supabase
-        .from('WorkDetails')
+        .from('workdetails')
         .select('*')
         .eq('employee_id', employeeId)
         .maybeSingle(),
       supabase
-        .from('Academics')
+        .from('academics')
         .select('*')
         .eq('employee_id', employeeId)
         .maybeSingle(),
       supabase
-        .from('Fitxatge')
+        .from('fitxatge')
         .select('*')
         .eq('employee_id', employeeId),
       supabase
-        .from('Baixes')
+        .from('baixes')
         .select('*')
         .eq('employee_id', employeeId),
     ]);
@@ -176,7 +176,7 @@ router.get('/:id', async (req, res) => {
     let jobDescription = null;
     if (workDetails && workDetails.job_id) {
       const { data: job, error: jobErr } = await supabase
-        .from('JobDescription')
+        .from('jobdescription')
         .select('*')
         .eq('job_id', workDetails.job_id)
         .maybeSingle();
@@ -276,11 +276,11 @@ router.put('/:id', upload.any(), async (req, res) => {
 
     // 3) Ensure child rows exist (Administration, Contact, etc.)
     const childTables = [
-      'Administration',
-      'Contact',
-      'Compensation',
-      'WorkDetails',
-      'Academics',
+      'administration',
+      'contact',
+      'compensation',
+      'workdetails',
+      'academics',
     ];
     for (const table of childTables) {
       const { data: existing, error: existErr } = await supabase
@@ -318,7 +318,7 @@ router.put('/:id', upload.any(), async (req, res) => {
     // ============== Employees =================
     {
       const { error } = await supabase
-        .from('Employees')
+        .from('employees')
         .update({
           full_name: employee.full_name || '',
           date_of_birth: dateOfBirth,
@@ -335,7 +335,7 @@ router.put('/:id', upload.any(), async (req, res) => {
     // ============== Administration =================
     {
       const { error } = await supabase
-        .from('Administration')
+        .from('administration')
         .update({
           employment_status: administration.employment_status || '',
           dni_nie_document: administration.dni_nie_document || '',
@@ -355,7 +355,7 @@ router.put('/:id', upload.any(), async (req, res) => {
     // ============== Contact =================
     {
       const { error } = await supabase
-        .from('Contact')
+        .from('contact')
         .update({
           address: contact.address || '',
           phone_number: contact.phone_number || '',
@@ -372,7 +372,7 @@ router.put('/:id', upload.any(), async (req, res) => {
     // ============== Compensation =================
     {
       const { error } = await supabase
-        .from('Compensation')
+        .from('compensation')
         .update({
           annual_salary: annualSalary,
           work_hours: workHours,
@@ -386,7 +386,7 @@ router.put('/:id', upload.any(), async (req, res) => {
     // ============== WorkDetails =================
     {
       const { error } = await supabase
-        .from('WorkDetails')
+        .from('workdetails')
         .update({
           job_id: jobId,
           date_joined: orNull(workDetails.date_joined),
@@ -406,7 +406,7 @@ router.put('/:id', upload.any(), async (req, res) => {
     // ============== Academics =================
     {
       const { error } = await supabase
-        .from('Academics')
+        .from('academics')
         .update({
           cv_document: academics.cv_document || '',
           certifications_document:
@@ -423,7 +423,7 @@ router.put('/:id', upload.any(), async (req, res) => {
     if (jobId && jobDescription) {
       if (jobDescription.department || jobDescription.job_title) {
         const { error } = await supabase
-          .from('JobDescription')
+          .from('jobdescription')
           .update({
             department:
               jobDescription.department ?? null,
@@ -440,7 +440,7 @@ router.put('/:id', upload.any(), async (req, res) => {
     // 5) Fitxatge deletions & upserts
     if (Array.isArray(fitxatge_deleted) && fitxatge_deleted.length > 0) {
       const { error } = await supabase
-        .from('Fitxatge')
+        .from('fitxatge')
         .delete()
         .in('id', fitxatge_deleted);
       if (error) {
@@ -461,7 +461,7 @@ router.put('/:id', upload.any(), async (req, res) => {
         };
 
         const { error } = await supabase
-          .from('Fitxatge')
+          .from('fitxatge')
           .upsert(payload);
         if (error) {
           console.error('Fitxatge upsert error:', error);
@@ -472,7 +472,7 @@ router.put('/:id', upload.any(), async (req, res) => {
     // 6) Baixes deletions & upserts
     if (Array.isArray(baixes_deleted) && baixes_deleted.length > 0) {
       const { error } = await supabase
-        .from('Baixes')
+        .from('baixes')
         .delete()
         .in('id', baixes_deleted);
       if (error) {
@@ -494,7 +494,7 @@ router.put('/:id', upload.any(), async (req, res) => {
         };
 
         const { error } = await supabase
-          .from('Baixes')
+          .from('baixes')
           .upsert(payload);
         if (error) {
           console.error('Baixes upsert error:', error);
@@ -527,14 +527,14 @@ router.delete('/:id', async (req, res) => {
   try {
     // Delete child rows explicitly to avoid FK issues
     const tablesToDelete = [
-      'Fitxatge',
-      'Baixes',
-      'Administration',
-      'Contact',
-      'Compensation',
-      'WorkDetails',
-      'Academics',
-      'Activities',
+      'fitxatge',
+      'baixes',
+      'administration',
+      'contact',
+      'compensation',
+      'workdetails',
+      'academics',
+      'activities',
     ];
 
     for (const table of tablesToDelete) {
@@ -548,7 +548,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     const { error: empErr } = await supabase
-      .from('Employees')
+      .from('employees')
       .delete()
       .eq('employee_id', employeeId);
     if (empErr) {
