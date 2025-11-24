@@ -10,7 +10,7 @@ function generate4DigitPin() {
 db.serialize(() => {
   // 1) Get all employees who don't have a PIN set
   db.all(
-    `SELECT employee_id FROM Employees
+    `SELECT employee_id FROM employees
      WHERE pin_code IS NULL OR pin_code = ''`,
     (err, rows) => {
       if (err) {
@@ -23,7 +23,7 @@ db.serialize(() => {
 
       // 2) Query existing pins to avoid collisions with them too
       db.all(
-        `SELECT pin_code FROM Employees
+        `SELECT pin_code FROM employees
          WHERE pin_code IS NOT NULL AND pin_code != ''`,
         (err2, pinRows) => {
           if (err2) {
