@@ -16,39 +16,50 @@ const app = express();
 /*  CORS setup (Render + Vercel)                                  */
 /*--------------------------------------------------------------- */
 
-// ✅ Add ALL allowed frontend origins here (including both Vercel URLs)
-const allowedOrigins = [
+const allowedOrigins = new Set([
   'http://localhost:3000',
-  'https://hr-frontend-puce.vercel.app',
-  'https://hr-frontend-30twhvueo-adria-busquets-projects.vercel.app',
-  // If you later add a custom domain, add it here too:
-  // 'https://your-domain.com',
-];
+  'https://hr-frontend-puce.vercel.app', // your production domain
+]);
 
-const corsOptions = {
-  origin: (origin, cb) => {
-    // Allow requests with no Origin (curl, server-to-server, etc.)
-    if (!origin) return cb(null, true);
+function isAllowedVercelDeployment(origin) {
+  // allow any deployment URL for YOUR project on vercel
+  // e.g. https://hr-frontend-xxxxx-adria-busquets-projects.vercel.app
+  try {
+    const u = new URL(origin);
+    return (
+      u.protocol === 'https:' &&
+      u.hostname.endsWith('.vercel.app') &&
+      (
+        u.hostname.startsWith('hr-frontend-') ||  // project deployments
+        u.hostname === 'hr-frontend-puce.vercel.app' // prod (already allowed)
+      )
+    );
+  } catch {
+    return false;
+  }
+}
 
-    if (allowedOrigins.includes(origin)) return cb(null, true);
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // curl/server-to-server
 
-    return cb(new Error(`CORS blocked for origin: ${origin}`), false);
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: false, // ✅ keep false unless you are using cookies/sessions
-};
+      if (allowedOrigins.has(origin) || isAllowedVercelDeployment(origin)) {
+        return cb(null, true);
+      }
 
-// Apply CORS to all routes
-app.use(cors(corsOptions));
+      // IMPORTANT: don't throw (throwing can create 500s)
+      return cb(null, false);
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: false,
+  })
+);
 
-// Preflight requests should use the SAME CORS config
-app.options('*', cors(corsOptions));
+// Preflight
+app.options('*', cors());
 
-app.use(express.json());
-
-// local uploads (optional)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 /*--------------------------------------------------------------- */
 /*  ENV DEBUG                                                     */
