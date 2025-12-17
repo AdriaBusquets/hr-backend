@@ -174,11 +174,11 @@ router.get('/:id', async (req, res) => {
     if (baixErr) console.error(baixErr);
 
     let jobDescription = null;
-    if (workDetails && workDetails.job_id) {
+    if (workdetails && workdetails.job_id) {
       const { data: job, error: jobErr } = await supabase
         .from('jobdescription')
         .select('*')
-        .eq('job_id', workDetails.job_id)
+        .eq('job_id', workdetails.job_id)
         .maybeSingle();
       if (jobErr) {
         console.error('Error fetching JobDescription:', jobErr);
@@ -192,7 +192,7 @@ router.get('/:id', async (req, res) => {
       administration,
       contact,
       compensation,
-      workDetails,
+      workdetails,
       academics,
       jobDescription,
       fitxatge: fitxatge || [],
@@ -238,7 +238,7 @@ router.put('/:id', upload.any(), async (req, res) => {
     administration = {},
     contact = {},
     compensation = {},
-    workDetails = {},
+    workdetails = {},
     academics = {},
     jobDescription = {},
     fitxatge = [],
@@ -304,15 +304,15 @@ router.put('/:id', upload.any(), async (req, res) => {
 
     // 4) Prepare transformed values
     const dateOfBirth = orNull(employee.date_of_birth);
-    const jobId = orNull(workDetails.job_id);
+    const jobId = orNull(workdetails.job_id);
     const annualSalary = orNull(compensation.annual_salary);
     const workHours = orNull(compensation.work_hours);
 
-    const supervisorValue = !!workDetails.Supervisor;
+    const supervisorValue = !!workdetails.Supervisor;
 
-    const empresaVal = orNull(workDetails.empresa);
-    const situationVal = orNull(workDetails.situation);
-    const wContractType = orNull(workDetails.contract_type);
+    const empresaVal = orNull(workdetails.empresa);
+    const situationVal = orNull(workdetails.situation);
+    const wContractType = orNull(workdetails.contract_type);
     const academicStudies = orNull(academics.studies);
 
     // ============== Employees =================
@@ -389,9 +389,9 @@ router.put('/:id', upload.any(), async (req, res) => {
         .from('workdetails')
         .update({
           job_id: jobId,
-          date_joined: orNull(workDetails.date_joined),
-          contract_start_date: orNull(workDetails.contract_start_date),
-          contract_end_date: orNull(workDetails.contract_end_date),
+          date_joined: orNull(workdetails.date_joined),
+          contract_start_date: orNull(workdetails.contract_start_date),
+          contract_end_date: orNull(workdetails.contract_end_date),
           Supervisor: supervisorValue,
           empresa: empresaVal,
           situation: situationVal,
@@ -399,7 +399,7 @@ router.put('/:id', upload.any(), async (req, res) => {
         })
         .eq('employee_id', employeeId);
       if (error) {
-        console.error('WorkDetails update error:', error);
+        console.error('Workdetails update error:', error);
       }
     }
 
