@@ -13,65 +13,78 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 /*--------------------------------------------------------------- */
-/*  CORS setup                                                    */
+/*  CORS setup (Render + Vercel)                                  */
 /*--------------------------------------------------------------- */
+
+// ✅ Put your real frontend domains here
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://hr-frontend-puce.vercel.app',
+  // If you later add a custom domain, add it here too:
+  // 'https://your-domain.com',
+];
+
 app.use(
   cors({
-    origin: ['http://localhost:3000', '*'],
+    origin: (origin, cb) => {
+      // Allow requests with no Origin (curl, server-to-server, etc.)
+      if (!origin) return cb(null, true);
+
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+
+      return cb(new Error(`CORS blocked for origin: ${origin}`), false);
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
+    credentials: false, // ✅ keep false unless you are using cookies/sessions
   })
 );
 
+// Preflight
 app.options('*', cors());
+
 app.use(express.json());
 
 // local uploads (optional)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 /*--------------------------------------------------------------- */
-/*  Import ESM Routes                                             */
+/*  ENV DEBUG                                                     */
 /*--------------------------------------------------------------- */
-
-console.log("Loaded ENV Vars:", {
+console.log('Loaded ENV Vars:', {
   SUPABASE_URL: process.env.SUPABASE_URL,
-  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? "OK" : "MISSING"
+  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? 'OK' : 'MISSING',
 });
-
 
 /*--------------------------------------------------------------- */
 /*  Import ESM Routes + DEBUG LOGS                                */
 /*--------------------------------------------------------------- */
 import addEmployees from './routes/addEmployees.js';
-console.log("addEmployees =", typeof addEmployees);
+console.log('addEmployees =', typeof addEmployees);
 
 import employeesRoutes from './routes/employees.js';
-console.log("employeesRoutes =", typeof employeesRoutes);
+console.log('employeesRoutes =', typeof employeesRoutes);
 
 import fitxatgeRoutes from './routes/fitxatge.js';
-console.log("fitxatgeRoutes =", typeof fitxatgeRoutes);
+console.log('fitxatgeRoutes =', typeof fitxatgeRoutes);
 
 import incidencesRoutes from './routes/incidences.js';
-console.log("incidencesRoutes =", typeof incidencesRoutes);
+console.log('incidencesRoutes =', typeof incidencesRoutes);
 
 import controlWorkers from './routes/controlWorkers.js';
-console.log("controlWorkers =", typeof controlWorkers);
+console.log('controlWorkers =', typeof controlWorkers);
 
 import infoRoutes from './routes/info.js';
-console.log("infoRoutes =", typeof infoRoutes);
+console.log('infoRoutes =', typeof infoRoutes);
 
 import alertsRouter from './routes/alerts.js';
-console.log("alertsRouter =", typeof alertsRouter);
+console.log('alertsRouter =', typeof alertsRouter);
 
 import fitxatgeEditorRoutes from './routes/fitxatgeEditor.js';
-console.log("fitxatgeEditorRoutes =", typeof fitxatgeEditorRoutes);
+console.log('fitxatgeEditorRoutes =', typeof fitxatgeEditorRoutes);
 
 import supervisorPasswordsRoute from './routes/supervisorpasswords.js';
-console.log("supervisorPasswordsRoute =", typeof supervisorPasswordsRoute);
-
-
-
+console.log('supervisorPasswordsRoute =', typeof supervisorPasswordsRoute);
 
 /*--------------------------------------------------------------- */
 /*  Mount routes                                                  */
@@ -87,29 +100,27 @@ app.use('/api/fitxatgeEditor', fitxatgeEditorRoutes);
 app.use('/api/supervisorpasswords', supervisorPasswordsRoute);
 
 /*--------------------------------------------------------------- */
-/*  ENVIRONMENT VARIABLES DEBUG ROUTE                            */
+/*  ENVIRONMENT VARIABLES DEBUG ROUTE                             */
 /*--------------------------------------------------------------- */
 app.get('/api/env-test', (req, res) => {
   return res.json({
-    SUPABASE_URL: process.env.SUPABASE_URL || "MISSING",
-    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? "OK" : "MISSING",
-    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? "OK" : "MISSING"
+    SUPABASE_URL: process.env.SUPABASE_URL || 'MISSING',
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? 'OK' : 'MISSING',
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? 'OK' : 'MISSING',
   });
 });
 
+/*--------------------------------------------------------------- */
+/*  Global error handler                                          */
+/*--------------------------------------------------------------- */
+app.use((err, req, res, next) => {
+  console.error('🔥 UNCAUGHT ERROR:', err);
+  res.status(500).json({ error: 'Internal server error', details: err.message });
+});
 
 /*--------------------------------------------------------------- */
 /*  Start server                                                  */
 /*--------------------------------------------------------------- */
 const PORT = process.env.PORT || 5000;
 
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error("🔥 UNCAUGHT ERROR:", err);
-  res.status(500).json({ error: "Internal server error", details: err.message });
-});
-
-
-app.listen(PORT, '0.0.0.0', () =>
-  console.log(`🚀 Server running on port ${PORT}`)
-);
+app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server running on port ${PORT}`));
