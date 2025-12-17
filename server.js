@@ -16,32 +16,34 @@ const app = express();
 /*  CORS setup (Render + Vercel)                                  */
 /*--------------------------------------------------------------- */
 
-// ✅ Put your real frontend domains here
+// ✅ Add ALL allowed frontend origins here (including both Vercel URLs)
 const allowedOrigins = [
   'http://localhost:3000',
   'https://hr-frontend-puce.vercel.app',
+  'https://hr-frontend-30twhvueo-adria-busquets-projects.vercel.app',
   // If you later add a custom domain, add it here too:
   // 'https://your-domain.com',
 ];
 
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      // Allow requests with no Origin (curl, server-to-server, etc.)
-      if (!origin) return cb(null, true);
+const corsOptions = {
+  origin: (origin, cb) => {
+    // Allow requests with no Origin (curl, server-to-server, etc.)
+    if (!origin) return cb(null, true);
 
-      if (allowedOrigins.includes(origin)) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
 
-      return cb(new Error(`CORS blocked for origin: ${origin}`), false);
-    },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: false, // ✅ keep false unless you are using cookies/sessions
-  })
-);
+    return cb(new Error(`CORS blocked for origin: ${origin}`), false);
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false, // ✅ keep false unless you are using cookies/sessions
+};
 
-// Preflight
-app.options('*', cors());
+// Apply CORS to all routes
+app.use(cors(corsOptions));
+
+// Preflight requests should use the SAME CORS config
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
 
