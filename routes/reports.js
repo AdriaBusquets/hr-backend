@@ -117,14 +117,27 @@ const REPORT_SCHEMA = {
       label: "Baixes",
       fk: "employee_id",
       type: "many",
-      columns: ["Dia_Inici", "Num_dias", "Return_Date", "Type", "Reason", "Approved"],
+      columns: [
+        "Dia_Inici",
+        "Num_dias",
+        "Return_Date",
+        "Type",
+        "Reason",
+        "Approved",
+      ],
     },
 
     incidences: {
       label: "Incidences",
       fk: "employee_id",
       type: "many",
-      columns: ["instance_type", "instanceDate", "CurrentDate", "InstanceStatus", "job_id"],
+      columns: [
+        "instance_type",
+        "instanceDate",
+        "CurrentDate",
+        "InstanceStatus",
+        "job_id",
+      ],
     },
 
     fitxatge: {
@@ -151,17 +164,10 @@ function uniq(arr) {
   return [...new Set(arr)];
 }
 
-function buildSelectString(fieldsByTable, schema) {
-  // fieldsByTable: { employees: ["full_name"], administration: ["dni_nie_number"], ... }
+function buildSelectString(fieldsByTable) {
   // Always include employee_id in base fetch
   const baseCols = uniq(["employee_id", ...(fieldsByTable.employees || [])]);
   return baseCols.join(",");
-}
-
-function pick(obj, cols) {
-  const out = {};
-  cols.forEach((c) => (out[c] = obj?.[c] ?? null));
-  return out;
 }
 
 /**
@@ -179,46 +185,71 @@ router.post("/run", async (req, res) => {
   try {
     const { fields, expandTable } = req.body || {};
 
+    // ✅ Hard validation: must be an array with at least 1 item
     if (!Array.isArray(fields) || fields.length === 0) {
-      return res.status(400).json({ error: "You must select at least 1 field." });
+      return res
+        .status(400)
+        .json({ error: "You must select at least 1 field." });
     }
 
-    // Validate tables/columns exist in schema
+    // ✅ Normalize expandTable: treat "", undefined, null as null
+    const normalizedExpand =
+      typeof expandTable === "string" && expandTable.trim()
+        ? expandTable.trim()
+        : null;
+
+    // Validate requested fields exist in schema + are well formed
     for (const f of fields) {
-      if (!f?.table || !f?.column) {
+      if (!f || typeof f.table !== "string" || typeof f.column !== "string") {
         return res.status(400).json({ error: "Invalid field format." });
       }
       const t = REPORT_SCHEMA.tables[f.table];
       if (!t) return res.status(400).json({ error: `Unknown table: ${f.table}` });
       if (!t.columns.includes(f.column)) {
-        return res.status(400).json({ error: `Unknown column: ${f.table}.${f.column}` });
+        return res
+          .status(400)
+          .json({ error: `Unknown column: ${f.table}.${f.column}` });
       }
     }
 
-    if (expandTable) {
-      const t = REPORT_SCHEMA.tables[expandTable];
+    // If expand provided, validate it exists and is type many
+    if (normalizedExpand) {
+      const t = REPORT_SCHEMA.tables[normalizedExpand];
       if (!t || t.type !== "many") {
-        return res.status(400).json({ error: "expandTable must be a one-to-many table (type 'many')." });
+        return res.status(400).json({
+          error:
+            "expandTable must be a one-to-many table (type 'many') or be blank.",
+        });
       }
     }
 
     // Group selected columns by table
     const fieldsByTable = {};
     for (const f of fields) {
-      fieldsByTable[f.table] = fieldsByTable[f.table] || [];
+      if (!fieldsByTable[f.table]) fieldsByTable[f.table] = [];
       fieldsByTable[f.table].push(f.column);
     }
 
+    // ✅ Safety: if expand is chosen but no fields from that expand table were selected,
+    // return a clean 400 instead of crashing.
+    if (normalizedExpand && !Array.isArray(fieldsByTable[normalizedExpand])) {
+      return res.status(400).json({
+        error: `You selected expandTable="${normalizedExpand}", but did not select any fields from that table.`,
+      });
+    }
+
     // 1) Fetch employees (base)
-    const baseSelect = buildSelectString(fieldsByTable, REPORT_SCHEMA);
+    const baseSelect = buildSelectString(fieldsByTable);
     const empRes = await supabase.from("employees").select(baseSelect);
     if (empRes.error) throw empRes.error;
+
     const employees = empRes.data || [];
     const employeeIds = employees.map((e) => e.employee_id);
 
     // If no employees, return empty
     if (employeeIds.length === 0) {
-      return res.json({ columns: [], rows: [] });
+      const outColumns = fields.map((f) => `${f.table}.${f.column}`);
+      return res.json({ columns: outColumns, rows: [] });
     }
 
     // 2) Fetch one-to-one tables
@@ -230,42 +261,65 @@ router.post("/run", async (req, res) => {
     const oneDataMaps = {}; // table -> Map(employee_id -> row)
     for (const t of oneTables) {
       const cols = uniq(["employee_id", ...fieldsByTable[t]]);
-      const r = await supabase.from(t).select(cols.join(",")).in("employee_id", employeeIds);
+      const r = await supabase
+        .from(t)
+        .select(cols.join(","))
+        .in("employee_id", employeeIds);
       if (r.error) throw r.error;
+
       const m = new Map();
       (r.data || []).forEach((row) => m.set(row.employee_id, row));
       oneDataMaps[t] = m;
     }
 
-    // 3) Special: jobdescription lookup if user selected it OR if user selected workdetails.job_id and jobdescription fields
-    // We only fetch jobdescription if some jobdescription columns were selected
+    // 3) jobdescription lookup merge (only if jobdescription fields selected)
     let jobMap = null;
-    if (fieldsByTable.jobdescription?.length) {
+
+    if (Array.isArray(fieldsByTable.jobdescription) && fieldsByTable.jobdescription.length) {
       // Need job_ids from workdetails
-      const wdRes = await supabase.from("workdetails").select("employee_id,job_id").in("employee_id", employeeIds);
+      const wdRes = await supabase
+        .from("workdetails")
+        .select("employee_id,job_id")
+        .in("employee_id", employeeIds);
+
       if (wdRes.error) throw wdRes.error;
 
       const jobIds = uniq((wdRes.data || []).map((x) => x.job_id).filter(Boolean));
+
       if (jobIds.length) {
         const cols = uniq(["job_id", ...fieldsByTable.jobdescription]);
-        const jdRes = await supabase.from("jobdescription").select(cols.join(",")).in("job_id", jobIds);
+        const jdRes = await supabase
+          .from("jobdescription")
+          .select(cols.join(","))
+          .in("job_id", jobIds);
+
         if (jdRes.error) throw jdRes.error;
+
         jobMap = new Map();
         (jdRes.data || []).forEach((row) => jobMap.set(row.job_id, row));
       } else {
         jobMap = new Map();
       }
 
-      // also keep a map employee_id -> job_id for later merge
+      // employee_id -> job_id
       oneDataMaps.__workdetails_job = new Map();
-      (wdRes.data || []).forEach((row) => oneDataMaps.__workdetails_job.set(row.employee_id, row.job_id));
+      (wdRes.data || []).forEach((row) =>
+        oneDataMaps.__workdetails_job.set(row.employee_id, row.job_id)
+      );
     }
 
     // 4) Fetch expand table (one-to-many) if requested
     let expandRowsByEmp = null;
-    if (expandTable) {
-      const cols = uniq(["employee_id", ...fieldsByTable[expandTable]]);
-      const r = await supabase.from(expandTable).select(cols.join(",")).in("employee_id", employeeIds);
+
+    if (normalizedExpand) {
+      const expandFields = fieldsByTable[normalizedExpand] || []; // ✅ safe
+      const cols = uniq(["employee_id", ...expandFields]);
+
+      const r = await supabase
+        .from(normalizedExpand)
+        .select(cols.join(","))
+        .in("employee_id", employeeIds);
+
       if (r.error) throw r.error;
 
       expandRowsByEmp = new Map();
@@ -276,7 +330,7 @@ router.post("/run", async (req, res) => {
       }
     }
 
-    // 5) Build output columns (stable order = same as selection order)
+    // 5) Output columns in selection order
     const outColumns = fields.map((f) => `${f.table}.${f.column}`);
 
     // 6) Build rows
@@ -298,9 +352,10 @@ router.post("/run", async (req, res) => {
         }
       }
 
-      // jobdescription lookup merge
-      if (fieldsByTable.jobdescription?.length) {
-        const jobId = oneDataMaps.__workdetails_job?.get(emp.employee_id) || null;
+      // jobdescription lookup
+      if (Array.isArray(fieldsByTable.jobdescription) && fieldsByTable.jobdescription.length) {
+        const jobId =
+          oneDataMaps.__workdetails_job?.get(emp.employee_id) || null;
         const jd = jobMap?.get(jobId) || null;
         for (const col of fieldsByTable.jobdescription || []) {
           baseRow[`jobdescription.${col}`] = jd?.[col] ?? null;
@@ -308,21 +363,23 @@ router.post("/run", async (req, res) => {
       }
 
       // expand table
-      if (expandTable) {
+      if (normalizedExpand) {
+        const expandFields = fieldsByTable[normalizedExpand] || []; // ✅ safe
         const list = expandRowsByEmp?.get(emp.employee_id) || [];
+
         if (list.length === 0) {
-          // still one row (employee with empty expanded columns)
+          // still one row with null child cols
           const row = { ...baseRow };
-          for (const col of fieldsByTable[expandTable] || []) {
-            row[`${expandTable}.${col}`] = null;
+          for (const col of expandFields) {
+            row[`${normalizedExpand}.${col}`] = null;
           }
           outRows.push(row);
         } else {
           // one row per child record
           for (const child of list) {
             const row = { ...baseRow };
-            for (const col of fieldsByTable[expandTable] || []) {
-              row[`${expandTable}.${col}`] = child?.[col] ?? null;
+            for (const col of expandFields) {
+              row[`${normalizedExpand}.${col}`] = child?.[col] ?? null;
             }
             outRows.push(row);
           }
@@ -333,7 +390,7 @@ router.post("/run", async (req, res) => {
       }
     }
 
-    // Ensure each row has all columns (in case some tables not selected)
+    // Ensure each row has all requested columns
     const normalizedRows = outRows.map((r) => {
       const obj = {};
       outColumns.forEach((c) => (obj[c] = r[c] ?? null));
@@ -343,7 +400,11 @@ router.post("/run", async (req, res) => {
     return res.json({ columns: outColumns, rows: normalizedRows });
   } catch (err) {
     console.error("❌ /api/reports/run error:", err);
-    return res.status(500).json({ error: "Report generation failed", details: err.message || String(err) });
+    // ✅ If supabase throws structured error, surface it cleanly
+    return res.status(500).json({
+      error: "Report generation failed",
+      details: err?.message || String(err),
+    });
   }
 });
 
