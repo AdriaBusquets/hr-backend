@@ -5,13 +5,23 @@ import supabase from "../supabase.js";
 const router = express.Router();
 
 /* --------------------------------------------------------------------- */
-/* GET /api/employees  (optional ?name= filter)                          */
+/* GET /api/employees  (optional ?name= or ?department= filter)          */
 /* --------------------------------------------------------------------- */
 router.get("/", async (req, res) => {
-  const { name } = req.query;
+  const { name, department } = req.query;
 
   try {
-    let query = supabase.from("employees").select("*");
+    let query = supabase
+      .from("employees")
+      .select(`
+        *,
+        workdetails (
+          job_id,
+          jobdescription (
+            department
+          )
+        )
+      `);
 
     if (name) {
       query = query.ilike("full_name", `%${name}%`);
@@ -22,7 +32,18 @@ router.get("/", async (req, res) => {
     const { data, error } = await query;
 
     if (error) throw error;
-    res.json(data || []);
+
+    let employees = data || [];
+
+    // If department filter is provided, filter employees by department
+    if (department) {
+      employees = employees.filter((emp) => {
+        const empDept = emp.workdetails?.jobdescription?.department;
+        return empDept === department;
+      });
+    }
+
+    res.json(employees);
   } catch (err) {
     console.error("Error fetching employees:", err);
     res.status(500).json({ error: "Failed to fetch employees." });

@@ -1,4 +1,4 @@
-// routes/fitxatge.js – Supabase version
+// routes/fitxatge.js – Supabase versio
 import express from "express";
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek.js";
@@ -172,11 +172,30 @@ router.post("/checkin-out", async (req, res) => {
 
 /********************************************************************
  *  GET: /api/fitxatge/active-employees
+ *  Optional query param: ?department=X
  *******************************************************************/
-router.get("/active-employees", async (_req, res) => {
-  const { data, error } = await supabase.rpc("get_active_employees");
-  if (error) return res.status(500).json({ error: "RPC get_active_employees failed." });
-  res.json(data || []);
+router.get("/active-employees", async (req, res) => {
+  const { department } = req.query;
+
+  try {
+    // Get all active employees
+    const { data, error } = await supabase.rpc("get_active_employees");
+    if (error) throw error;
+
+    let activeEmployees = data || [];
+
+    // If department filter is provided, filter the results
+    if (department) {
+      activeEmployees = activeEmployees.filter(
+        (emp) => emp.department === department
+      );
+    }
+
+    res.json(activeEmployees);
+  } catch (err) {
+    console.error("Error fetching active employees:", err);
+    return res.status(500).json({ error: "RPC get_active_employees failed." });
+  }
 });
 
 /********************************************************************

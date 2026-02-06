@@ -50,10 +50,10 @@ router.post('/', async (req, res) => {
 });
 
 /********************************************************************
- * GET /api/incidences  (optional filter: job_id)
+ * GET /api/incidences  (optional filter: job_id or department)
  *******************************************************************/
 router.get('/', async (req, res) => {
-  const { job_id } = req.query;
+  const { job_id, department } = req.query;
 
   let query = supabase
     .from('incidences')
@@ -70,7 +70,8 @@ router.get('/', async (req, res) => {
         workdetails (
           job_id,
           jobdescription (
-            job_title
+            job_title,
+            department
           )
         )
       )
@@ -88,17 +89,23 @@ router.get('/', async (req, res) => {
     return res.status(500).json({ error: 'Failed to fetch incidences.' });
   }
 
-  const cleaned = data.map(i => ({
+  let cleaned = data.map(i => ({
     incidence_id: i.incidence_id,
     incidence_type: i.incidence_type,
-    description: i.description,
     InstanceStatus: i.InstanceStatus,
+    description: i.description,
     date_created: i.date_created,
     date_resolved: i.date_resolved,
     full_name: i.employees.full_name,
     job_title: i.employees.workdetails?.jobdescription?.job_title || null,
-    job_id: i.employees.workdetails?.job_id || null
+    job_id: i.employees.workdetails?.job_id || null,
+    department: i.employees.workdetails?.jobdescription?.department || null
   }));
+
+  // If department filter is provided, filter incidences by department
+  if (department) {
+    cleaned = cleaned.filter(i => i.department === department);
+  }
 
   res.json(cleaned);
 });

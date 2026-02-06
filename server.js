@@ -94,6 +94,8 @@ console.log('supervisorPasswordsRoute =', typeof supervisorPasswordsRoute);
 
 import reportsRoutes from './routes/reports.js';
 
+import departmentsRoutes from './routes/departments.js';
+console.log('departmentsRoutes =', typeof departmentsRoutes);
 
 /*--------------------------------------------------------------- */
 /*  Mount routes                                                  */
@@ -108,6 +110,7 @@ app.use('/api/alerts', alertsRouter);
 app.use('/api/fitxatgeEditor', fitxatgeEditorRoutes);
 app.use('/api/supervisorpasswords', supervisorPasswordsRoute);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/departments', departmentsRoutes);
 
 /*--------------------------------------------------------------- */
 /*  ENVIRONMENT VARIABLES DEBUG ROUTE                             */
