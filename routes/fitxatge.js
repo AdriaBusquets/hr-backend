@@ -8,8 +8,8 @@ dayjs.extend(isoWeek);
 
 const router = express.Router();
 
-const MAX_SESSION_SECONDS = 12.5 * 3600; 
-const AUTO_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+const MAX_SESSION_SECONDS = 10 * 3600; // Auto checkout after 10 hours
+const AUTO_CHECK_INTERVAL_MS = 5 * 60 * 1000; // Check every 5 minutes
 
 /* ------------------------------------------------------------- */
 /* Helpers                                                       */
@@ -153,7 +153,9 @@ router.post("/checkin-out", async (req, res) => {
       await supabase.from("incidences").insert([
         {
           worker_id: employeeId,
-          incidence_type: "Auto-checkout >12h30",
+          incidence_type: "Auto-checkout >10h (no manual checkout)",
+          description: "Employee did not check out after 10 hours. Automatic checkout applied.",
+          InstanceStatus: "Open",
           date_created: today,
         },
       ]);
@@ -161,7 +163,7 @@ router.post("/checkin-out", async (req, res) => {
 
     return res.json({
       message: forced
-        ? "Check-out successful (auto-capped at 12h30)."
+        ? "Check-out successful (auto-capped at 10 hours)."
         : "Check-out successful.",
     });
   } catch (e) {
@@ -234,6 +236,8 @@ async function forceLongSessions() {
 
     if (seconds <= MAX_SESSION_SECONDS) continue;
 
+    console.log(`Auto-checkout: Employee ${r.employee_id} exceeded 10 hours. Checking out automatically...`);
+
     const [dayS, weekS, monthS] = await Promise.all([
       sumSecondsForDay(r.employee_id, today),
       sumSecondsForWeek(r.employee_id, now),
@@ -256,7 +260,9 @@ async function forceLongSessions() {
     await supabase.from("incidences").insert([
       {
         worker_id: r.employee_id,
-        incidence_type: "Auto-checkout >12h30",
+        incidence_type: "Auto-checkout >10h (no manual checkout)",
+        description: "Employee did not check out after 10 hours. Automatic checkout applied.",
+        InstanceStatus: "Open",
         date_created: today,
       },
     ]);
