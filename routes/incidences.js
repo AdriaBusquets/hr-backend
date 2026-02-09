@@ -5,6 +5,15 @@ import supabase from '../supabase.js';
 
 const router = express.Router();
 
+/**
+ * FIX APPLIED:
+ * Your Postgres column is `instancestatus` (lowercase), NOT `InstanceStatus`.
+ * We:
+ * - write to `instancestatus` on INSERT/UPDATE
+ * - read `instancestatus` in SELECT / filters
+ * - still return `InstanceStatus` in the response JSON for frontend compatibility
+ */
+
 /********************************************************************
  * POST /api/incidences
  * Create a new incidence for an employee using their PIN code
@@ -35,7 +44,7 @@ router.post('/', async (req, res) => {
       worker_id: employee.employee_id,
       incidence_type: incidenceType,
       description: description || null,
-      InstanceStatus: 'Open',
+      instancestatus: 'Open', // ✅ FIX
       date_created: today,
       date_resolved: null,
     });
@@ -54,26 +63,19 @@ router.post('/', async (req, res) => {
 
 /********************************************************************
  * GET /api/incidences  (optional filter: job_id or department)
- *
- * FIXES:
- * - employees!worker_id was wrong and caused Supabase/PostgREST errors.
- *   Supabase reported multiple relationships, so we must specify the FK.
- *   Using: employees!incidences_worker_fk  (change to the other one if needed)
- * - job_id filtering now happens in JS after fetch (reliable), instead of trying
- *   to filter through nested embeds which is often brittle.
  *******************************************************************/
 router.get('/', async (req, res) => {
   try {
     const { job_id, department } = req.query;
 
-    let query = supabase
+    const { data, error } = await supabase
       .from('incidences')
       .select(
         `
         incidence_id,
         incidence_type,
         description,
-        InstanceStatus,
+        instancestatus,
         date_created,
         date_resolved,
         employees!incidences_worker_fk (
@@ -89,17 +91,14 @@ router.get('/', async (req, res) => {
         )
       `
       )
-      .neq('InstanceStatus', 'Completed')
+      .neq('instancestatus', 'Completed') // ✅ FIX
       .order('date_created', { ascending: false });
-
-    const { data, error } = await query;
 
     if (error) {
       console.error('GET /api/incidences supabase error:', error);
       return res.status(500).json({ error: 'Failed to fetch incidences.' });
     }
 
-    // Normalize + avoid crashes if any nested object is null
     let cleaned = (data || []).map((i) => {
       const emp = i.employees || null;
       const wd = emp?.workdetails || null;
@@ -113,7 +112,8 @@ router.get('/', async (req, res) => {
       return {
         incidence_id: i.incidence_id,
         incidence_type: i.incidence_type,
-        InstanceStatus: i.InstanceStatus,
+        // ✅ Keep frontend compatibility (it expects InstanceStatus)
+        InstanceStatus: i.instancestatus,
         description: i.description,
         date_created: i.date_created,
         date_resolved: i.date_resolved,
@@ -167,13 +167,12 @@ router.get('/job-ids', async (_req, res) => {
 router.put('/complete/:id', async (req, res) => {
   try {
     const { id } = req.params;
-
     const today = dayjs().format('YYYY-MM-DD');
 
     const { error } = await supabase
       .from('incidences')
       .update({
-        InstanceStatus: 'Completed',
+        instancestatus: 'Completed', // ✅ FIX
         date_resolved: today,
       })
       .eq('incidence_id', id);
