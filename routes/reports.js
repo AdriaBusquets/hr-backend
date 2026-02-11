@@ -408,4 +408,197 @@ router.post("/run", async (req, res) => {
   }
 });
 
+/**
+ * POST /api/reports/nocturnal-hours
+ * Returns rows where employees worked past 22:00.
+ * Each row: day, employee name, hours worked after 22:00.
+ * body: { startDate?, endDate? }
+ */
+router.post("/nocturnal-hours", async (req, res) => {
+  try {
+    const { startDate, endDate } = req.body || {};
+
+    // Fetch all fitxatge records ordered by employee, date, time
+    let query = supabase
+      .from("fitxatge")
+      .select("id, dia, hora, working, employee_id")
+      .order("employee_id", { ascending: true })
+      .order("dia", { ascending: true })
+      .order("hora", { ascending: true })
+      .order("id", { ascending: true });
+
+    if (startDate) query = query.gte("dia", startDate);
+    if (endDate) query = query.lte("dia", endDate);
+
+    const { data: records, error: fitError } = await query;
+    if (fitError) throw fitError;
+
+    // Fetch employee names
+    const empIds = [...new Set((records || []).map((r) => r.employee_id))];
+    if (empIds.length === 0) {
+      return res.json({ columns: ["Día", "Empleado", "Horas Nocturnas"], rows: [] });
+    }
+
+    const { data: employees, error: empError } = await supabase
+      .from("employees")
+      .select("employee_id, full_name")
+      .in("employee_id", empIds);
+    if (empError) throw empError;
+
+    const empMap = new Map();
+    (employees || []).forEach((e) => empMap.set(e.employee_id, e.full_name));
+
+    // Pair check-ins with check-outs and calculate nocturnal hours
+    const NIGHT_START_SECONDS = 22 * 3600; // 22:00 in seconds
+    const rows = [];
+
+    // Group records by employee_id + dia
+    const grouped = new Map();
+    for (const rec of records || []) {
+      const key = `${rec.employee_id}_${rec.dia}`;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(rec);
+    }
+
+    for (const [, dayRecords] of grouped) {
+      let lastCheckIn = null;
+      let nocturnalSeconds = 0;
+      const empId = dayRecords[0].employee_id;
+      const dia = dayRecords[0].dia;
+
+      for (const rec of dayRecords) {
+        if (rec.working === true) {
+          lastCheckIn = rec.hora;
+        } else if (rec.working === false && lastCheckIn) {
+          // Calculate nocturnal overlap
+          const inSec = timeToSec(lastCheckIn);
+          const outSec = timeToSec(rec.hora);
+
+          if (outSec > NIGHT_START_SECONDS) {
+            const nocturnalStart = Math.max(inSec, NIGHT_START_SECONDS);
+            nocturnalSeconds += outSec - nocturnalStart;
+          }
+
+          lastCheckIn = null;
+        }
+      }
+
+      if (nocturnalSeconds > 0) {
+        const hh = String(Math.floor(nocturnalSeconds / 3600)).padStart(2, "0");
+        const mm = String(Math.floor((nocturnalSeconds % 3600) / 60)).padStart(2, "0");
+        rows.push({
+          "Día": dia,
+          "Empleado": empMap.get(empId) || `ID ${empId}`,
+          "Horas Nocturnas": `${hh}:${mm}`,
+        });
+      }
+    }
+
+    return res.json({
+      columns: ["Día", "Empleado", "Horas Nocturnas"],
+      rows,
+    });
+  } catch (err) {
+    console.error("❌ /api/reports/nocturnal-hours error:", err);
+    return res.status(500).json({ error: "Report generation failed", details: err?.message || String(err) });
+  }
+});
+
+/**
+ * POST /api/reports/over-8h30
+ * Returns rows where employees worked more than 8:30 in a single day.
+ * Each row: day, employee name, total hours worked.
+ * body: { startDate?, endDate? }
+ */
+router.post("/over-8h30", async (req, res) => {
+  try {
+    const { startDate, endDate } = req.body || {};
+    const THRESHOLD_SECONDS = 8 * 3600 + 30 * 60; // 8h30m
+
+    // Fetch all fitxatge records
+    let query = supabase
+      .from("fitxatge")
+      .select("id, dia, hora, working, employee_id")
+      .order("employee_id", { ascending: true })
+      .order("dia", { ascending: true })
+      .order("hora", { ascending: true })
+      .order("id", { ascending: true });
+
+    if (startDate) query = query.gte("dia", startDate);
+    if (endDate) query = query.lte("dia", endDate);
+
+    const { data: records, error: fitError } = await query;
+    if (fitError) throw fitError;
+
+    // Fetch employee names
+    const empIds = [...new Set((records || []).map((r) => r.employee_id))];
+    if (empIds.length === 0) {
+      return res.json({ columns: ["Día", "Empleado", "Horas Trabajadas"], rows: [] });
+    }
+
+    const { data: employees, error: empError } = await supabase
+      .from("employees")
+      .select("employee_id, full_name")
+      .in("employee_id", empIds);
+    if (empError) throw empError;
+
+    const empMap = new Map();
+    (employees || []).forEach((e) => empMap.set(e.employee_id, e.full_name));
+
+    // Group records by employee_id + dia
+    const grouped = new Map();
+    for (const rec of records || []) {
+      const key = `${rec.employee_id}_${rec.dia}`;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(rec);
+    }
+
+    const rows = [];
+
+    for (const [, dayRecords] of grouped) {
+      let lastCheckIn = null;
+      let totalSeconds = 0;
+      const empId = dayRecords[0].employee_id;
+      const dia = dayRecords[0].dia;
+
+      for (const rec of dayRecords) {
+        if (rec.working === true) {
+          lastCheckIn = rec.hora;
+        } else if (rec.working === false && lastCheckIn) {
+          const inSec = timeToSec(lastCheckIn);
+          const outSec = timeToSec(rec.hora);
+          const diff = outSec - inSec;
+          if (diff > 0) totalSeconds += diff;
+          lastCheckIn = null;
+        }
+      }
+
+      if (totalSeconds > THRESHOLD_SECONDS) {
+        const hh = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+        const mm = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+        rows.push({
+          "Día": dia,
+          "Empleado": empMap.get(empId) || `ID ${empId}`,
+          "Horas Trabajadas": `${hh}:${mm}`,
+        });
+      }
+    }
+
+    return res.json({
+      columns: ["Día", "Empleado", "Horas Trabajadas"],
+      rows,
+    });
+  } catch (err) {
+    console.error("❌ /api/reports/over-8h30 error:", err);
+    return res.status(500).json({ error: "Report generation failed", details: err?.message || String(err) });
+  }
+});
+
+/** Helper: convert "HH:mm:ss" or "HH:mm" to total seconds */
+function timeToSec(timeStr) {
+  if (!timeStr) return 0;
+  const parts = timeStr.split(":").map(Number);
+  return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+}
+
 export default router;

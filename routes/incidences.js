@@ -117,6 +117,7 @@ router.get('/', async (req, res) => {
         description: i.description,
         date_created: i.date_created,
         date_resolved: i.date_resolved,
+        employee_id: emp?.employee_id ?? null,
         full_name: emp?.full_name ?? null,
         job_title: jdRow?.job_title ?? null,
         job_id: wdRow?.job_id ?? null,
