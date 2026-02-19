@@ -27,45 +27,53 @@ function secondsToTime(totalSeconds = 0) {
   return `${hh}:${mm}:${ss}`;
 }
 
+// These functions return the cumulative total from the LAST checkout row for the period.
+// Each checkout row stores the running cumulative total, so we just need the latest one —
+// summing all rows would double-count every prior session.
+
 async function sumSecondsForDay(employeeId, dateStr) {
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from("fitxatge")
     .select("hores_diaries")
     .eq("employee_id", employeeId)
-    .eq("dia", dateStr);
-
-  if (error) return 0;
-  return data.reduce((t, r) => t + timeToSeconds(r.hores_diaries), 0);
+    .eq("dia", dateStr)
+    .eq("working", false)
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ? timeToSeconds(data.hores_diaries) : 0;
 }
 
 async function sumSecondsForWeek(employeeId, now) {
   const start = now.startOf("week").format("YYYY-MM-DD");
   const end = now.endOf("week").format("YYYY-MM-DD");
-
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from("fitxatge")
-    .select("hores_diaries")
+    .select("hores_setmanals")
     .eq("employee_id", employeeId)
     .gte("dia", start)
-    .lte("dia", end);
-
-  if (error) return 0;
-  return data.reduce((t, r) => t + timeToSeconds(r.hores_diaries), 0);
+    .lte("dia", end)
+    .eq("working", false)
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ? timeToSeconds(data.hores_setmanals) : 0;
 }
 
 async function sumSecondsForMonth(employeeId, now) {
   const start = now.startOf("month").format("YYYY-MM-DD");
   const end = now.endOf("month").format("YYYY-MM-DD");
-
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from("fitxatge")
-    .select("hores_diaries")
+    .select("hores_mensuals")
     .eq("employee_id", employeeId)
     .gte("dia", start)
-    .lte("dia", end);
-
-  if (error) return 0;
-  return data.reduce((t, r) => t + timeToSeconds(r.hores_diaries), 0);
+    .lte("dia", end)
+    .eq("working", false)
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ? timeToSeconds(data.hores_mensuals) : 0;
 }
 
 /********************************************************************
@@ -102,7 +110,7 @@ router.post("/checkin-out", async (req, res) => {
 
     /********** CHECK-IN **********/
     if (!last || last.working === false) {
-      await supabase.from("fitxatge").insert([
+      const { error: insertErr } = await supabase.from("fitxatge").insert([
         {
           dia: today,
           hora: nowTime,
@@ -115,6 +123,10 @@ router.post("/checkin-out", async (req, res) => {
           vacances: 0,
         },
       ]);
+      if (insertErr) {
+        console.error("Check-in insert error:", insertErr);
+        return res.status(500).json({ error: "Failed to save check-in record." });
+      }
       return res.json({ message: "Check-in successful." });
     }
 
@@ -128,7 +140,7 @@ router.post("/checkin-out", async (req, res) => {
       sumSecondsForMonth(employeeId, now),
     ]);
 
-    await supabase.from("fitxatge").insert([
+    const { error: insertErr } = await supabase.from("fitxatge").insert([
       {
         dia: today,
         hora: nowTime,
@@ -141,6 +153,11 @@ router.post("/checkin-out", async (req, res) => {
         vacances: last.vacances ?? 0,
       },
     ]);
+
+    if (insertErr) {
+      console.error("Check-out insert error:", insertErr);
+      return res.status(500).json({ error: "Failed to save check-out record." });
+    }
 
     return res.json({ message: "Check-out successful." });
   } catch (e) {
