@@ -186,10 +186,23 @@ router.get("/active-employees", async (req, res) => {
 
     let activeEmployees = data || [];
 
-    // If department filter is provided, filter the results
+    // If department filter is provided, look up which employee_ids belong
+    // to that department (the RPC result may not include a department field)
     if (department) {
-      activeEmployees = activeEmployees.filter(
-        (emp) => emp.department === department
+      const { data: deptRows, error: deptErr } = await supabase
+        .from("workdetails")
+        .select("employee_id, jobdescription(department)");
+
+      if (deptErr) throw deptErr;
+
+      const deptEmployeeIds = new Set(
+        (deptRows || [])
+          .filter((row) => row.jobdescription?.department === department)
+          .map((row) => row.employee_id)
+      );
+
+      activeEmployees = activeEmployees.filter((emp) =>
+        deptEmployeeIds.has(emp.employee_id)
       );
     }
 

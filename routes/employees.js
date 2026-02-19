@@ -36,10 +36,11 @@ router.get("/", async (req, res) => {
     let employees = data || [];
 
     // If department filter is provided, filter employees by department
+    // workdetails is an array (one-to-many), so check with .some()
     if (department) {
       employees = employees.filter((emp) => {
-        const empDept = emp.workdetails?.jobdescription?.department;
-        return empDept === department;
+        const wds = Array.isArray(emp.workdetails) ? emp.workdetails : [];
+        return wds.some((wd) => wd.jobdescription?.department === department);
       });
     }
 
