@@ -423,6 +423,7 @@ router.put('/:id', upload.any(), async (req, res) => {
           contract_start_date: orNull(workdetails.contract_start_date),
           contract_end_date: orNull(workdetails.contract_end_date),
           supervisor: supervisorValue,
+
           empresa: empresaVal,
           situation: situationVal,
           contract_type: wContractType,
