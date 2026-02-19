@@ -120,13 +120,7 @@ router.post("/checkin-out", async (req, res) => {
 
     /********** CHECK-OUT **********/
     const start = dayjs(`${last.dia} ${last.hora}`);
-    let seconds = now.diff(start, "second");
-    let forced = false;
-
-    if (seconds > MAX_SESSION_SECONDS) {
-      seconds = MAX_SESSION_SECONDS;
-      forced = true;
-    }
+    const seconds = now.diff(start, "second");
 
     const [dayS, weekS, monthS] = await Promise.all([
       sumSecondsForDay(employeeId, today),
@@ -148,24 +142,7 @@ router.post("/checkin-out", async (req, res) => {
       },
     ]);
 
-    // If forced, log incidence
-    if (forced) {
-      await supabase.from("incidences").insert([
-        {
-          worker_id: employeeId,
-          incidence_type: "Auto-checkout >10h (no manual checkout)",
-          description: "Employee did not check out after 10 hours. Automatic checkout applied.",
-          InstanceStatus: "Open",
-          date_created: today,
-        },
-      ]);
-    }
-
-    return res.json({
-      message: forced
-        ? "Check-out successful (auto-capped at 10 hours)."
-        : "Check-out successful.",
-    });
+    return res.json({ message: "Check-out successful." });
   } catch (e) {
     console.error("checkin-out error:", e);
     return res.status(500).json({ error: "Unexpected server error." });
