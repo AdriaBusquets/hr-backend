@@ -103,7 +103,13 @@ router.post('/upload', async (req, res) => {
     return res.status(400).json({ error: 'pastedText is required.' });
   }
 
-  // ---- 1) Parse the pasted Excel text ----
+  function normalizeHours(value) {
+  if (!value || value.trim() === '') return null;
+  if (value.trim().toUpperCase() === 'F') return 'LIBRE';
+  return value.trim();
+}
+
+
   const lines = pastedText
     .split('\n')
     .map(line => line.split('\t').map(cell => cell.trim()));
@@ -264,7 +270,7 @@ router.post('/upload', async (req, res) => {
         week_id: targetWeekId,
         day_of_week: dayName,
         shift: 'MAÑANA',
-        hours: emp.mañanaHours[dayName] || null,
+        hours: normalizeHours(emp.mañanaHours[dayName]),
       });
       // TARDE
       rowsToInsert.push({
@@ -272,7 +278,7 @@ router.post('/upload', async (req, res) => {
         week_id: targetWeekId,
         day_of_week: dayName,
         shift: 'TARDE',
-        hours: emp.tardeHours[dayName] || null,
+        hours: normalizeHours(emp.tardeHours[dayName]),
       });
     }
   }
