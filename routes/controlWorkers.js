@@ -29,7 +29,8 @@ const upload = multer({
 });
 
 /* ----------------------------------------------------------------
- * helper: upload file to Supabase Storage and return public URL
+ * helper: upload file to Supabase Storage and return FILE PATH
+ * (we store the path, not the public URL, for security)
  * ---------------------------------------------------------------- */
 async function uploadToStorage(employeeId, file) {
   const ext = path.extname(file.originalname) || '';
@@ -52,11 +53,26 @@ async function uploadToStorage(employeeId, file) {
     throw uploadError;
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePathInBucket);
+  // Return the path in the bucket (not a public URL)
+  return filePathInBucket;
+}
 
-  return publicUrl;
+/* ----------------------------------------------------------------
+ * helper: generate a signed URL from a stored path
+ * - If already a full http URL (legacy), return as-is
+ * - Otherwise generate a 1-hour signed URL
+ * ---------------------------------------------------------------- */
+async function getSignedUrl(filePath) {
+  if (!filePath) return null;
+  if (filePath.startsWith('http')) return filePath; // legacy public URLs
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .createSignedUrl(filePath, 3600); // 1 hour expiry
+  if (error) {
+    console.error('Error generating signed URL:', error);
+    return null;
+  }
+  return data.signedUrl;
 }
 
 /* ----------------------------------------------------------------
@@ -187,6 +203,20 @@ router.get('/:id', async (req, res) => {
       }
     }
 
+    // Generate signed URLs for all file fields (1 hour expiry)
+    if (employee) {
+      employee.photo = await getSignedUrl(employee.photo);
+    }
+    if (administration) {
+      administration.dni_nie_document = await getSignedUrl(administration.dni_nie_document);
+      administration.bank_account_document = await getSignedUrl(administration.bank_account_document);
+      administration.social_security_document = await getSignedUrl(administration.social_security_document);
+    }
+    if (academics) {
+      academics.cv_document = await getSignedUrl(academics.cv_document);
+      academics.certifications_document = await getSignedUrl(academics.certifications_document);
+    }
+
     res.json({
       employee,
       administration,
@@ -248,11 +278,11 @@ router.put('/:id', upload.any(), async (req, res) => {
   } = bodyData;
 
   try {
-    // 2) Upload files to Supabase Storage and map URLs into objects
+    // 2) Upload files to Supabase Storage and store FILE PATHS (not public URLs)
     for (const file of req.files || []) {
-      let url;
+      let filePath;
       try {
-        url = await uploadToStorage(employeeId, file);
+        filePath = await uploadToStorage(employeeId, file);
       } catch (e) {
         console.error('Upload error for field', file.fieldname, e);
         continue;
@@ -260,17 +290,17 @@ router.put('/:id', upload.any(), async (req, res) => {
 
       const fieldName = file.fieldname;
       if (fieldName === 'employee[photo]') {
-        employee.photo = url;
+        employee.photo = filePath;
       } else if (fieldName === 'administration[dni_nie_document]') {
-        administration.dni_nie_document = url;
+        administration.dni_nie_document = filePath;
       } else if (fieldName === 'administration[bank_account_document]') {
-        administration.bank_account_document = url;
+        administration.bank_account_document = filePath;
       } else if (fieldName === 'administration[social_security_document]') {
-        administration.social_security_document = url;
+        administration.social_security_document = filePath;
       } else if (fieldName === 'academics[cv_document]') {
-        academics.cv_document = url;
+        academics.cv_document = filePath;
       } else if (fieldName === 'academics[certifications_document]') {
-        academics.certifications_document = url;
+        academics.certifications_document = filePath;
       }
     }
 
