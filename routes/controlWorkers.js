@@ -308,7 +308,7 @@ router.put('/:id', upload.any(), async (req, res) => {
     const annualSalary = orNull(compensation.annual_salary);
     const workHours = orNull(compensation.work_hours);
 
-    const supervisorValue = !!workdetails.Supervisor;
+    const supervisorValue = !!(workdetails.supervisor ?? workdetails.Supervisor);
 
     const empresaVal = orNull(workdetails.empresa);
     const situationVal = orNull(workdetails.situation);
@@ -392,7 +392,7 @@ router.put('/:id', upload.any(), async (req, res) => {
           date_joined: orNull(workdetails.date_joined),
           contract_start_date: orNull(workdetails.contract_start_date),
           contract_end_date: orNull(workdetails.contract_end_date),
-          Supervisor: supervisorValue,
+          supervisor: supervisorValue,
           empresa: empresaVal,
           situation: situationVal,
           contract_type: wContractType,
