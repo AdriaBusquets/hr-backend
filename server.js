@@ -97,6 +97,9 @@ import reportsRoutes from './routes/reports.js';
 import departmentsRoutes from './routes/departments.js';
 console.log('departmentsRoutes =', typeof departmentsRoutes);
 
+import timetableRouter from './routes/timetable.js';
+console.log('timetableRouter =', typeof timetableRouter);
+
 /*--------------------------------------------------------------- */
 /*  Mount routes                                                  */
 /*--------------------------------------------------------------- */
@@ -111,6 +114,7 @@ app.use('/api/fitxatgeEditor', fitxatgeEditorRoutes);
 app.use('/api/supervisorpasswords', supervisorPasswordsRoute);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/departments', departmentsRoutes);
+app.use('/api/timetable', timetableRouter);
 
 /*--------------------------------------------------------------- */
 /*  ENVIRONMENT VARIABLES DEBUG ROUTE                             */
