@@ -19,34 +19,35 @@ router.get('/supervisors', async (req, res) => {
     return res.status(400).json({ error: 'Missing department' });
   }
 
-  // Query structure:
-  // workdetails → employees → jobdescription
+  // Query structure: workdetails → employees + jobdescription
   const { data, error } = await supabase
     .from('workdetails')
     .select(`
-      Supervisor,
-      employees:Employees (
+      supervisor,
+      employees (
         full_name,
         pin_code
       ),
-      job:JobDescription (
+      jobdescription (
         department
       )
     `)
-    .eq('Supervisor', true)
-    .eq('job.department', department);
+    .eq('supervisor', true);
 
   if (error) {
     console.error('Supabase error fetching supervisors:', error);
     return res.status(500).json({ error: 'Failed to fetch supervisors' });
   }
 
-  // Flatten the nested structure from Supabase
-  const supervisors = (data || []).map(row => ({
-    full_name: row.employees?.full_name,
-    pin_code: row.employees?.pin_code,
-    department: row.job?.department
-  }));
+  // Flatten and filter by the requested department in JS (avoids alias-based PostgREST filter issues)
+  const supervisors = (data || [])
+    .filter(row => row.jobdescription?.department === department)
+    .map(row => ({
+      full_name: row.employees?.full_name,
+      pin_code: row.employees?.pin_code,
+      department: row.jobdescription?.department,
+    }))
+    .filter(s => s.full_name && s.pin_code);
 
   res.json(supervisors);
 });
