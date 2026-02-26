@@ -127,7 +127,7 @@ router.post("/checkin-out", async (req, res) => {
         console.error("Check-in insert error:", insertErr);
         return res.status(500).json({ error: "Failed to save check-in record." });
       }
-      return res.json({ message: "Check-in successful." });
+      return res.json({ message: "Entrada" });
     }
 
     /********** CHECK-OUT **********/
@@ -159,7 +159,7 @@ router.post("/checkin-out", async (req, res) => {
       return res.status(500).json({ error: "Failed to save check-out record." });
     }
 
-    return res.json({ message: "Check-out successful." });
+    return res.json({ message: "Salida" });
   } catch (e) {
     console.error("checkin-out error:", e);
     return res.status(500).json({ error: "Unexpected server error." });
@@ -234,8 +234,6 @@ async function forceLongSessions() {
   if (!openSessions) return;
 
   const now = dayjs();
-  const today = now.format("YYYY-MM-DD");
-  const nowTime = now.format("HH:mm:ss");
 
   for (const r of openSessions) {
     const started = dayjs(`${r.dia} ${r.hora}`);
@@ -243,18 +241,24 @@ async function forceLongSessions() {
 
     if (seconds <= MAX_SESSION_SECONDS) continue;
 
-    console.log(`Auto-checkout: Employee ${r.employee_id} exceeded 10 hours. Checking out automatically...`);
+    // Pin the checkout to exactly check-in + 10h so the date is always
+    // correct regardless of when the background job happens to fire.
+    const checkoutTime = started.add(MAX_SESSION_SECONDS, "second");
+    const checkoutDia  = checkoutTime.format("YYYY-MM-DD");
+    const checkoutHora = checkoutTime.format("HH:mm:ss");
+
+    console.log(`Auto-checkout: Employee ${r.employee_id} — pinned to ${checkoutDia} ${checkoutHora}`);
 
     const [dayS, weekS, monthS] = await Promise.all([
-      sumSecondsForDay(r.employee_id, today),
-      sumSecondsForWeek(r.employee_id, now),
-      sumSecondsForMonth(r.employee_id, now),
+      sumSecondsForDay(r.employee_id, checkoutDia),
+      sumSecondsForWeek(r.employee_id, checkoutTime),
+      sumSecondsForMonth(r.employee_id, checkoutTime),
     ]);
 
     await supabase.from("fitxatge").insert([
       {
-        dia: today,
-        hora: nowTime,
+        dia: checkoutDia,
+        hora: checkoutHora,
         employee_id: r.employee_id,
         working: false,
         active: false,
@@ -270,7 +274,7 @@ async function forceLongSessions() {
         incidence_type: "Auto-checkout >10h (no manual checkout)",
         description: "Employee did not check out after 10 hours. Automatic checkout applied.",
         InstanceStatus: "Open",
-        date_created: today,
+        date_created: checkoutDia,
       },
     ]);
   }

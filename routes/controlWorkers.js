@@ -514,15 +514,16 @@ router.put('/:id', upload.any(), async (req, res) => {
     if (Array.isArray(baixes)) {
       for (const record of baixes) {
         const payload = {
-          id: record.id ?? undefined,
           employee_id: employeeId,
-          Dia_Inici: orNull(record.Dia_Inici),
-          Num_dias: record.Num_dias ?? 0,
-          Type: record.Type || '',
-          Return_Date: orNull(record.Return_Date),
-          Reason: record.Reason || '',
-          Approved: !!record.Approved,
+          dia_inici: orNull(record.dia_inici),
+          num_dias: record.num_dias != null ? Number(record.num_dias) : 0,
+          type: record.type || '',
+          return_date: orNull(record.return_date),
+          reason: record.reason || '',
+          approved: !!record.approved,
         };
+        // Only include id when updating an existing record
+        if (record.id) payload.id = record.id;
 
         const { error } = await supabase
           .from('baixes')

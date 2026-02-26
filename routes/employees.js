@@ -1,5 +1,6 @@
 // routes/employees.js — Supabase ES module version
 import express from "express";
+import dayjs from "dayjs";
 import supabase from "../supabase.js";
 
 const router = express.Router();
@@ -75,7 +76,32 @@ router.get("/hours/:employee_id", async (req, res) => {
     });
   }
 
-  res.json(data || []);
+  const rows = [...(data || [])];
+
+  // If the employee is currently checked in, add live elapsed time to their
+  // check-in date entry so WorkDaySummary shows in-progress hours.
+  const { data: last } = await supabase
+    .from("fitxatge")
+    .select("dia, hora, working")
+    .eq("employee_id", employee_id)
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (last && last.working === true) {
+    const elapsedHours = dayjs().diff(dayjs(`${last.dia} ${last.hora}`), "second") / 3600;
+    const existingIdx = rows.findIndex((r) => r.date === last.dia);
+    if (existingIdx >= 0) {
+      rows[existingIdx] = {
+        ...rows[existingIdx],
+        hours_worked: (rows[existingIdx].hours_worked || 0) + elapsedHours,
+      };
+    } else {
+      rows.push({ date: last.dia, hours_worked: elapsedHours });
+    }
+  }
+
+  res.json(rows);
 });
 
 /* --------------------------------------------------------------------- */

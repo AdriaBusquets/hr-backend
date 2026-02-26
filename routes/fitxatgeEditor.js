@@ -62,11 +62,11 @@ async function recomputeHours(employeeId) {
         currentDay = rowDate;
       }
 
-      // Week change (ISO week)
-      const rowWeek = rowDate.isoWeek();
-      if (currentWeek !== rowWeek) {
+      // Week change (ISO year + ISO week, to handle year boundaries correctly)
+      const rowWeekKey = `${rowDate.isoWeekYear()}-W${rowDate.isoWeek()}`;
+      if (currentWeek !== rowWeekKey) {
         runningWeeklySeconds = 0;
-        currentWeek = rowWeek;
+        currentWeek = rowWeekKey;
       }
 
       // Month change
@@ -131,9 +131,9 @@ router.get('/editor/:employee_id', async (req, res) => {
     .from('fitxatge')
     .select('*')
     .eq('employee_id', employeeId)
-    .order('dia', { ascending: true })
-    .order('hora', { ascending: true })
-    .order('id', { ascending: true });
+    .order('dia', { ascending: false })
+    .order('hora', { ascending: false })
+    .order('id', { ascending: false });
 
   if (error) {
     console.error(error);

@@ -164,6 +164,17 @@ function uniq(arr) {
   return [...new Set(arr)];
 }
 
+/** Resolve a department name → array of employee_ids (or null if no filter). */
+async function resolveDeptEmployeeIds(department) {
+  if (!department) return null;
+  const { data: wdRows } = await supabase
+    .from("workdetails")
+    .select("employee_id, jobdescription(department)");
+  return (wdRows || [])
+    .filter((r) => r.jobdescription?.department === department)
+    .map((r) => r.employee_id);
+}
+
 function buildSelectString(fieldsByTable) {
   // Always include employee_id in base fetch
   const baseCols = uniq(["employee_id", ...(fieldsByTable.employees || [])]);
@@ -183,7 +194,7 @@ function buildSelectString(fieldsByTable) {
  */
 router.post("/run", async (req, res) => {
   try {
-    const { fields, expandTable } = req.body || {};
+    const { fields, expandTable, department } = req.body || {};
 
     // ✅ Hard validation: must be an array with at least 1 item
     if (!Array.isArray(fields) || fields.length === 0) {
@@ -238,9 +249,16 @@ router.post("/run", async (req, res) => {
       });
     }
 
-    // 1) Fetch employees (base)
+    // 1) Fetch employees (base), optionally filtered by department
+    const deptIds = await resolveDeptEmployeeIds(department);
+    if (deptIds && deptIds.length === 0) {
+      return res.json({ columns: fields.map((f) => `${f.table}.${f.column}`), rows: [] });
+    }
+
     const baseSelect = buildSelectString(fieldsByTable);
-    const empRes = await supabase.from("employees").select(baseSelect);
+    let empQuery = supabase.from("employees").select(baseSelect);
+    if (deptIds) empQuery = empQuery.in("employee_id", deptIds);
+    const empRes = await empQuery;
     if (empRes.error) throw empRes.error;
 
     const employees = empRes.data || [];
@@ -416,7 +434,12 @@ router.post("/run", async (req, res) => {
  */
 router.post("/nocturnal-hours", async (req, res) => {
   try {
-    const { startDate, endDate } = req.body || {};
+    const { startDate, endDate, department } = req.body || {};
+
+    const deptIds = await resolveDeptEmployeeIds(department);
+    if (deptIds && deptIds.length === 0) {
+      return res.json({ columns: ["Día", "Empleado", "Horas Nocturnas"], rows: [] });
+    }
 
     // Fetch all fitxatge records ordered by employee, date, time
     let query = supabase
@@ -429,6 +452,7 @@ router.post("/nocturnal-hours", async (req, res) => {
 
     if (startDate) query = query.gte("dia", startDate);
     if (endDate) query = query.lte("dia", endDate);
+    if (deptIds) query = query.in("employee_id", deptIds);
 
     const { data: records, error: fitError } = await query;
     if (fitError) throw fitError;
@@ -512,8 +536,13 @@ router.post("/nocturnal-hours", async (req, res) => {
  */
 router.post("/over-8h30", async (req, res) => {
   try {
-    const { startDate, endDate } = req.body || {};
+    const { startDate, endDate, department } = req.body || {};
     const THRESHOLD_SECONDS = 8 * 3600 + 30 * 60; // 8h30m
+
+    const deptIds = await resolveDeptEmployeeIds(department);
+    if (deptIds && deptIds.length === 0) {
+      return res.json({ columns: ["Día", "Empleado", "Horas Trabajadas"], rows: [] });
+    }
 
     // Fetch all fitxatge records
     let query = supabase
@@ -526,6 +555,7 @@ router.post("/over-8h30", async (req, res) => {
 
     if (startDate) query = query.gte("dia", startDate);
     if (endDate) query = query.lte("dia", endDate);
+    if (deptIds) query = query.in("employee_id", deptIds);
 
     const { data: records, error: fitError } = await query;
     if (fitError) throw fitError;
