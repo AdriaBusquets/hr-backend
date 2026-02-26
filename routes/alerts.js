@@ -36,33 +36,40 @@ router.get('/', async (_req, res) => {
 });
 
 /* ================================================================== */
-/* 1️⃣  Employees currently clocked in (working = true)               */
+/* 1️⃣  Employees currently clocked in                                */
+/*     Uses the same get_active_employees RPC as ActiveEmployeesScreen*/
 /* ================================================================== */
 async function getClockedInNow() {
-  const { data: sessions, error } = await supabase
-    .from('fitxatge')
-    .select('employee_id, dia, start_time')
-    .eq('working', true);
+  const { data: active, error } = await supabase.rpc('get_active_employees');
 
   if (error) {
     console.error('clockedInNow error:', error);
     return [];
   }
-  if (!sessions?.length) return [];
+  if (!active?.length) return [];
 
-  const empIds = sessions.map((s) => s.employee_id);
-  const { data: employees } = await supabase
-    .from('employees')
-    .select('employee_id, full_name')
-    .in('employee_id', empIds);
+  const empIds = active.map((e) => e.employee_id);
 
-  const empMap = {};
-  (employees || []).forEach((e) => { empMap[e.employee_id] = e.full_name; });
+  // Fetch the latest check-in row per employee to get dia + hora
+  const { data: checkIns } = await supabase
+    .from('fitxatge')
+    .select('employee_id, dia, hora')
+    .in('employee_id', empIds)
+    .eq('working', true)
+    .order('id', { ascending: false });
 
-  return sessions.map((s) => ({
-    full_name: empMap[s.employee_id] || 'Unknown',
-    dia: s.dia,
-    start_time: s.start_time,
+  // Keep only the first (most recent) check-in per employee
+  const startMap = {};
+  (checkIns || []).forEach((r) => {
+    if (!startMap[r.employee_id]) {
+      startMap[r.employee_id] = { dia: r.dia, start_time: r.hora };
+    }
+  });
+
+  return active.map((e) => ({
+    full_name: e.full_name,
+    dia:        startMap[e.employee_id]?.dia        ?? null,
+    start_time: startMap[e.employee_id]?.start_time ?? null,
   }));
 }
 
@@ -118,7 +125,7 @@ async function getOpenIncidences() {
   const { count, error: countErr } = await supabase
     .from('incidences')
     .select('incidence_id', { count: 'exact', head: true })
-    .neq('InstanceStatus', 'Completed');
+    .neq('instancestatus', 'Completed');
 
   if (countErr) {
     console.error('openIncidences count error:', countErr);
